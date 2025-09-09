@@ -36,3 +36,16 @@ UltraRAG-Clone/
 ├── data/                  # 数据存储
 ├── requirements.txt
 └── main.py               # 主入口文件
+
+启动方式
+# 列出所有可用的流水线
+python main.py --list-pipelines
+
+# 使用特定流水线执行查询
+python main.py --pipeline deepnote_pipeline --query "什么是人工智能?"
+
+# 使用默认流水线执行查询
+python main.py --query "机器学习的基本概念"
+
+# 启动带YAML支持的Web界面
+python main.py --webui
