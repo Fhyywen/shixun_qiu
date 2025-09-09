@@ -1,0 +1,23 @@
+name: "vanilla_rag_pipeline"
+version: "1.0"
+description: "基础 Vanilla RAG 流水线"
+
+steps:
+  - name: "retrieve_documents"
+    type: "retrieve"
+    parameters:
+      top_k: 5
+      threshold: 0.7
+
+  - name: "generate_answer"
+    type: "generate"
+    parameters:
+      prompt_template: |
+        基于以下背景信息回答问题。如果信息不足，请说明无法回答。
+
+        背景信息:
+        {context}
+
+        问题: {query}
+
+        请提供准确、简洁的回答:

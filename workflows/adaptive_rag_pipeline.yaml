@@ -1,0 +1,54 @@
+name: "adaptive_rag_pipeline"
+version: "1.0"
+description: "自适应 RAG 流水线"
+
+steps:
+  - name: "initial_retrieval"
+    type: "retrieve"
+    parameters:
+      top_k: 10
+      threshold: 0.5
+
+  - name: "filter_documents"
+    type: "conditional"
+    parameters:
+      condition:
+        type: "document_count"
+        min_documents: 5
+      then:
+        - name: "select_best_documents"
+          type: "generate"
+          parameters:
+            prompt_template: |
+              从以下文档中选择最相关的3个文档来回答问题：
+
+              文档列表:
+              {context}
+
+              问题: {query}
+
+              请选择最相关的3个文档的ID:
+
+        - name: "generate_with_selected"
+          type: "generate"
+          parameters:
+            prompt_template: |
+              基于以下精选信息回答问题：
+
+              {selected_context}
+
+              问题: {query}
+
+              请提供专业、准确的回答:
+      else:
+        - name: "generate_direct"
+          type: "generate"
+          parameters:
+            prompt_template: |
+              基于以下有限信息回答问题：
+
+              {context}
+
+              问题: {query}
+
+              请注意信息有限，请谨慎回答:
