@@ -1,51 +1,54 @@
-# shixun_qiu
-
-UltraRAG-Clone/
-├── core/
+TimeSeries-Knowledge-Base/
+├── app.py                      # Flask Web应用主入口
+├── config.py                   # 应用配置文件
+├── .env                        # 环境变量文件
+├── requirements.txt            # Python依赖包列表
+├── README.md                   # 项目说明文档
+│
+├── knowledge_base/             # 知识库核心模块
+│   ├── __init__.py            # 包初始化文件
+│   ├── data_processing.py     # 数据处理和文本分块
+│   ├── vector_store.py        # FAISS向量存储管理
+│   ├── qa_system.py           # 问答系统核心逻辑
+│   ├── utils.py               # 工具函数
+│   └── llm_integration.py     # LLM集成模块（可选）
+│
+├── data/                       # 数据存储目录
+│   └── time_series_docs/      # 时间序列相关文档
+│       ├── arima.md           # ARIMA算法文档
+│       ├── prophet.md         # Prophet算法文档
+│       ├── lstm.md            # LSTM算法文档
+│       ├── ets.md             # ETS算法文档
+│       └── preprocessing.md   # 数据预处理文档
+│
+├── knowledge_base_files/       # 向量存储文件目录
+│   ├── time_series.index      # FAISS索引文件
+│   └── time_series.data       # 元数据文件
+│
+├── static/                     # 静态资源文件
+│   ├── css/
+│   │   └── style.css          # 样式表
+│   ├── js/
+│   │   └── script.js          # JavaScript文件
+│   └── images/                # 图片资源
+│
+├── templates/                  # HTML模板文件
+│   ├── base.html              # 基础模板
+│   ├── index.html             # 主页面
+│   ├── results.html           # 结果展示页面
+│   └── error.html             # 错误页面
+│
+├── logs/                       # 日志文件目录
+│   └── app.log                # 应用日志
+│
+├── tests/                      # 测试目录
 │   ├── __init__.py
-│   ├── model_manager.py      # 模型管理模块
-│   ├── knowledge_manager.py  # 知识库管理模块
-│   ├── data_constructor.py   # 数据构建模块
-│   ├── trainer.py           # 训练模块
-│   ├── evaluator.py         # 评估推理模块
-│   └── rag_system.py        # RAG 系统核心
-├── webui/
-│   ├── __init__.py
-│   ├── app.py              # Web界面主程序
-│   ├── static/             # 静态文件
-│   └── templates/          # HTML模板
-│       ├── base.html
-│       ├── index.html
-│       ├── knowledge.html
-│       ├── training.html
-│       └── inference.html
-├── workflows/              # 预设工作流
-│   ├── __init__.py
-│   ├── vanilla_rag.py
-│   ├── deepnote.py
-│   └── rag_adaptation.py
-├── utils/                  # 工具函数
-│   ├── __init__.py
-│   ├── data_utils.py
-│   ├── model_utils.py
-│   └── file_utils.py
-├── config/
-│   ├── __init__.py
-│   └── settings.py        # 配置文件
-├── models/                # 模型存储
-├── data/                  # 数据存储
-├── requirements.txt
-└── main.py               # 主入口文件
-
-启动方式
-# 列出所有可用的流水线
-python main.py --list-pipelines
-
-# 使用特定流水线执行查询
-python main.py --pipeline deepnote_pipeline --query "什么是人工智能?"
-
-# 使用默认流水线执行查询
-python main.py --query "机器学习的基本概念"
-
-# 启动带YAML支持的Web界面
-python main.py --webui
+│   ├── test_data_processing.py
+│   ├── test_vector_store.py
+│   ├── test_qa_system.py
+│   └── test_app.py
+│
+└── scripts/                    # 脚本工具目录
+    ├── build_knowledge_base.py # 知识库构建脚本
+    ├── add_document.py         # 文档添加脚本
+    └── evaluate_system.py      # 系统评估脚本

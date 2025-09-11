@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>时间序列预测算法知识库</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>时间序列预测算法知识库问答系统</h1>
+            <p>提问关于ARIMA、Prophet、LSTM等时间序列预测算法的问题</p>
+        </header>
+
+        <main>
+            <form id="question-form">
+                <div class="input-group">
+                    <input type="text" id="question-input" placeholder="请输入关于时间序列预测算法的问题..." autocomplete="off">
+                    <button type="submit">提问</button>
+                </div>
+            </form>
+
+            <div id="answer-container">
+                <div id="answer"></div>
+                <div id="references"></div>
+            </div>
+
+            <div id="loading" class="hidden">
+                <p>正在思考中...</p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.getElementById('question-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const questionInput = document.getElementById('question-input');
+            const question = questionInput.value.trim();
+
+            if (!question) return;
+
+            // 显示加载中
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('answer').innerHTML = '';
+            document.getElementById('references').innerHTML = '';
+
+            try {
+                const response = await fetch('/ask', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        'question': question
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    document.getElementById('answer').innerHTML = `<p class="error">${data.error}</p>`;
+                } else {
+                    document.getElementById('answer').innerHTML = `<p>${data.answer.replace(/\n/g, '<br>')}</p>`;
+
+                    // 显示参考文献
+                    if (data.results && data.results.length > 0) {
+                        let referencesHtml = '<h3>参考来源:</h3><ul>';
+                        data.results.forEach(result => {
+                            referencesHtml += `<li>${result.metadata.title} (相似度: ${(1 - result.distance).toFixed(3)})</li>`;
+                        });
+                        referencesHtml += '</ul>';
+                        document.getElementById('references').innerHTML = referencesHtml;
+                    }
+                }
+            } catch (error) {
+                document.getElementById('answer').innerHTML = `<p class="error">请求失败: ${error.message}</p>`;
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+                questionInput.value = '';
+            }
+        });
+    </script>
+</body>
+</html>

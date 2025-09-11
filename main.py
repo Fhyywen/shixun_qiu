@@ -2,6 +2,9 @@ import argparse
 import logging
 from pathlib import Path
 
+import os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
