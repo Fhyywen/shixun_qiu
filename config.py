@@ -1,45 +1,60 @@
 import os
 from dotenv import load_dotenv
 
-# 加载环境变量
 load_dotenv()
 
 
 class Config:
-    """应用配置类"""
-
-    # Flask配置
-    SECRET_KEY = os.getenv('SECRET_KEY', 'dev-key-please-change-in-production')
-    DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
-
-    # 知识库配置
-    KNOWLEDGE_BASE_DIR = os.getenv('KNOWLEDGE_BASE_DIR', 'knowledge_base')
-    DATA_DIR = os.getenv('DATA_DIR', 'data/time_series_docs')
-    VECTOR_STORE_PATH = os.getenv('VECTOR_STORE_PATH', 'knowledge_base/time_series')
-
     # 模型配置
-    EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'all-MiniLM-L6-v2')
-    EMBEDDING_DIMENSION = int(os.getenv('EMBEDDING_DIMENSION', '384'))
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+    LLM_MODEL = os.getenv("LLM_MODEL", "openai")
 
-    # 检索配置
-    CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', '500'))
-    CHUNK_OVERLAP = int(os.getenv('CHUNK_OVERLAP', '50'))
-    SEARCH_RESULTS_COUNT = int(os.getenv('SEARCH_RESULTS_COUNT', '5'))
+    # OpenAI配置
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
+    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
 
-    # LLM配置（可选，用于未来扩展）
-    LLM_PROVIDER = os.getenv('LLM_PROVIDER', 'none')  # openai, huggingface, none
-    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
-    HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_API_KEY', '')
+    # 通义千问配置
+    TONGYI_API_KEY = os.getenv("TONGYI_API_KEY")
+    TONGYI_API_BASE = os.getenv("TONGYI_API_BASE", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+    TONGYI_MODEL = os.getenv("TONGYI_MODEL", "qwen-max")
 
-    # 文件类型配置
-    SUPPORTED_FILE_TYPES = ['.md', '.txt', '.pdf', '.docx']
+    # Azure配置
+    AZURE_API_KEY = os.getenv("AZURE_API_KEY")
+    AZURE_API_BASE = os.getenv("AZURE_API_BASE")
+    AZURE_DEPLOYMENT = os.getenv("AZURE_DEPLOYMENT")
+    AZURE_API_VERSION = os.getenv("AZURE_API_VERSION", "2023-05-15")
 
-    @classmethod
-    def ensure_directories_exist(cls):
+    # 路径配置 - 添加缺失的配置项
+    DATA_PATH = os.getenv("DATA_PATH", "data/")
+    DATA_DIR = DATA_PATH  # 别名
+    KNOWLEDGE_BASE_PATH = os.getenv("KNOWLEDGE_BASE_PATH", "knowledge_base/")
+    CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "chroma_db/")
+    VECTOR_STORE_PATH = CHROMA_DB_PATH  # 别名
+
+    # 分块配置 - 添加缺失的配置项
+    CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 500))
+    CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 50))
+
+    # 搜索配置 - 添加缺失的配置项
+    SEARCH_RESULTS_COUNT = int(os.getenv("SEARCH_RESULTS_COUNT", 3))
+    TOP_K = SEARCH_RESULTS_COUNT  # 别名
+    SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", 0.7))
+
+    # Flask配置 - 添加缺失的配置项
+    DEBUG = os.getenv("DEBUG", "False").lower() == "true"
+    SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
+
+    @staticmethod
+    def ensure_directories_exist():
         """确保必要的目录存在"""
-        os.makedirs(cls.DATA_DIR, exist_ok=True)
-        os.makedirs(cls.KNOWLEDGE_BASE_DIR, exist_ok=True)
+        directories = [
+            Config.DATA_PATH,
+            Config.CHROMA_DB_PATH,
+            os.path.dirname(Config.KNOWLEDGE_BASE_PATH) if Config.KNOWLEDGE_BASE_PATH else None
+        ]
 
-
-# 创建配置实例
-config = Config()
+        for directory in directories:
+            if directory and not os.path.exists(directory):
+                os.makedirs(directory)
+                print(f"创建目录: {directory}")

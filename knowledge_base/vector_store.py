@@ -2,12 +2,12 @@ import faiss
 import numpy as np
 import pickle
 import os
-from config import config
+from config import Config
 
 
 class VectorStore:
     def __init__(self, dimension=None):
-        self.dimension = dimension or config.EMBEDDING_DIMENSION
+        self.dimension = dimension or Config.EMBEDDING_DIMENSION
         self.index = faiss.IndexFlatL2(self.dimension)
         self.texts = []
         self.metadata = []

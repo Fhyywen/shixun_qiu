@@ -1,131 +1,171 @@
-from .data_processing import DataProcessor
-from .vector_store import VectorStore
 import os
-from config import config
+import chromadb
+from typing import List, Dict, Any
+from knowledge_base.data_processing import DataProcessor
+from knowledge_base.llm_providers import LLMProvider
+from config import Config
+import requests
+import json
 
 
 class TimeSeriesQA:
-    def __init__(self,
-                 data_dir=None,
-                 vector_store_path=None,
-                 embedding_model=None,
-                 chunk_size=None,
-                 chunk_overlap=None):
+    def __init__(self, config: Config = None):
+        if config is None:
+            self.config = Config()
+        else:
+            self.config = config
 
-        self.data_dir = data_dir or config.DATA_DIR
-        self.vector_store_path = vector_store_path or config.VECTOR_STORE_PATH
-        self.embedding_model = embedding_model or config.EMBEDDING_MODEL
-        self.chunk_size = chunk_size or config.CHUNK_SIZE
-        self.chunk_overlap = chunk_overlap or config.CHUNK_OVERLAP
+        self.processor = DataProcessor(model_name=self.config.EMBEDDING_MODEL)
+        self.llm_provider = LLMProvider(self.config)
+        self.chroma_client = chromadb.PersistentClient(path=self.config.CHROMA_DB_PATH)
 
-        self.processor = DataProcessor(model_name=self.embedding_model)
-        self.vector_store = VectorStore(dimension=config.EMBEDDING_DIMENSION)
-        self.initialized = False
+        # 尝试获取或创建集合
+        try:
+            self.collection = self.chroma_client.get_collection("time_series_knowledge")
+            print("连接到现有的向量数据库集合")
+        except:
+            self.collection = self.chroma_client.create_collection("time_series_knowledge")
+            print("创建新的向量数据库集合")
 
-    def initialize(self):
-        """初始化知识库"""
-        if self.initialized:
-            return True
+    def build_knowledge_base(self, data_path: str = None):
+        """构建知识库"""
+        if data_path is None:
+            data_path = self.config.DATA_PATH
 
-        # 检查是否有保存的向量存储
-        index_path = f"{self.vector_store_path}.index"
-        data_path = f"{self.vector_store_path}.data"
-
-        if os.path.exists(index_path) and os.path.exists(data_path):
-            print("加载现有的向量存储...")
-            try:
-                self.vector_store.load(self.vector_store_path)
-                self.initialized = True
-                print("知识库加载完成!")
-                return True
-            except Exception as e:
-                print(f"加载向量存储失败: {e}")
-                # 继续创建新的向量存储
-
-        print("创建新的向量存储...")
-        # 加载和处理文档
-        if not os.path.exists(self.data_dir):
-            os.makedirs(self.data_dir, exist_ok=True)
-            print(f"警告: 数据目录 {self.data_dir} 不存在，已创建空目录")
-            return False
-
-        documents = self.processor.load_documents(self.data_dir)
+        print("开始构建知识库...")
+        documents = self.processor.load_documents(data_path)
 
         if not documents:
-            print(f"警告: 在 {self.data_dir} 中没有找到文档")
-            return False
+            print("没有找到任何文档，请检查数据路径")
+            return 0
 
-        # 准备文本和元数据
-        all_chunks = []
-        all_metadata = []
+        chunks = self.processor.chunk_documents(documents)
+        embeddings = self.processor.generate_embeddings([chunk["content"] for chunk in chunks])
 
-        for doc in documents:
-            for chunk in doc['chunks']:
-                all_chunks.append(chunk)
-                all_metadata.append({
-                    'title': doc['title'],
-                    'source': doc['title']
-                })
+        # 准备数据用于存储
+        ids = [f"doc_{i}" for i in range(len(chunks))]
+        documents_content = [chunk["content"] for chunk in chunks]
+        metadatas = [{
+            "source": chunk["source"],
+            "chunk_index": chunk["chunk_index"]
+        } for chunk in chunks]
 
-        # 生成嵌入向量
-        print("生成嵌入向量...")
-        embeddings = self.processor.generate_embeddings(all_chunks)
+        # 存储到ChromaDB
+        self.collection.add(
+            ids=ids,
+            embeddings=embeddings.tolist(),
+            documents=documents_content,
+            metadatas=metadatas
+        )
 
-        # 添加到向量存储
-        print("构建向量索引...")
-        self.vector_store.add_embeddings(embeddings, all_chunks, all_metadata)
+        print(f"知识库构建完成，共处理 {len(chunks)} 个文档块")
+        return len(chunks)
 
-        # 保存向量存储
-        os.makedirs(os.path.dirname(self.vector_store_path), exist_ok=True)
-        self.vector_store.save(self.vector_store_path)
+    def search_similar_documents(self, query: str, top_k: int = None) -> List[Dict[str, Any]]:
+        """搜索相似文档"""
+        if top_k is None:
+            top_k = self.config.TOP_K
 
-        self.initialized = True
-        print("知识库初始化完成!")
-        return True
+        # 生成查询嵌入
+        query_embedding = self.processor.generate_embeddings([query])[0].tolist()
 
-    def ask(self, question, k=5):
-        """回答问题"""
-        if not self.initialized:
-            if not self.initialize():
-                return {
-                    'question': question,
-                    'results': [],
-                    'answer': "知识库尚未初始化或没有可用的文档。"
-                }
+        # 搜索相似文档
+        results = self.collection.query(
+            query_embeddings=[query_embedding],
+            n_results=top_k
+        )
 
-        # 生成问题的嵌入向量
-        question_embedding = self.processor.generate_embeddings([question])[0]
+        similar_docs = []
+        if results['documents'] and results['documents'][0]:
+            for i in range(len(results['documents'][0])):
+                similarity = 1 - results['distances'][0][i]  # 转换距离为相似度
+                if similarity >= self.config.SIMILARITY_THRESHOLD:
+                    similar_docs.append({
+                        "content": results['documents'][0][i],
+                        "similarity": similarity,
+                        "metadata": results['metadatas'][0][i] if results['metadatas'] and results['metadatas'][
+                            0] else {}
+                    })
 
-        # 搜索最相关的文档块
-        results = self.vector_store.search(question_embedding, k=k)
+        return similar_docs
 
-        # 构建回答
-        answer = {
-            'question': question,
-            'results': results,
-            'answer': self.generate_answer(question, results)
-        }
+    def generate_answer_with_context(self, query: str, context: List[Dict[str, Any]]) -> str:
+        """基于上下文生成答案"""
+        # 构建上下文
+        context_text = "\n\n".join([f"相关文档 {i + 1} (相似度: {doc['similarity']:.2f}):\n{doc['content']}"
+                                    for i, doc in enumerate(context)])
 
-        return answer
+        # 构建提示词
+        prompt = f"""你是一个时间序列分析专家。基于以下相关知识，请回答用户的问题。
 
-    def generate_answer(self, question, results):
-        """基于检索结果生成回答"""
-        if not results:
-            return "抱歉，我没有找到相关的时间序列预测算法信息。"
+相关背景知识：
+{context_text}
 
-        # 简单实现：返回最相关的结果
-        context = "\n".join([f"[来自: {result['metadata']['title']}]\n{result['text']}"
-                             for result in results])
+用户问题：{query}
 
-        # 在实际应用中，这里可以使用LLM生成更精确的回答
-        answer = f"基于时间序列预测知识库，我找到了以下相关信息：\n\n{context}"
+请根据上述知识提供专业、准确的回答。如果信息不足，可以基于你的专业知识进行补充。"""
 
-        return answer
+        messages = [
+            {"role": "system", "content": "你是一个时间序列分析专家，擅长金融数据分析、预测建模和统计学习。"},
+            {"role": "user", "content": prompt}
+        ]
 
-    def get_stats(self):
-        """获取知识库统计信息"""
-        return {
-            'initialized': self.initialized,
-            'document_count': len(self.vector_store.texts) if self.initialized else 0,
-            'vector_dimension': config.EMBEDDING_DIMENSION
-        }
+        try:
+            response = self.llm_provider.generate_response(messages)
+            return response
+        except Exception as e:
+            return f"生成回答时出错: {str(e)}"
+
+    def generate_answer_without_context(self, query: str) -> str:
+        """当没有本地上下文时，使用LLM的一般知识回答"""
+        prompt = f"""你是一个时间序列分析专家。请回答以下关于时间序列分析的问题。
+
+用户问题：{query}
+
+请基于你的专业知识提供准确、专业的回答。如果你是推测或不确定，请说明。"""
+
+        messages = [
+            {"role": "system", "content": "你是一个时间序列分析专家，擅长金融数据分析、预测建模和统计学习。"},
+            {"role": "user", "content": prompt}
+        ]
+
+        try:
+            response = self.llm_provider.generate_response(messages)
+            return response
+        except Exception as e:
+            return f"生成回答时出错: {str(e)}"
+
+    def search_web_knowledge(self, query: str) -> str:
+        """模拟联网搜索（实际使用时可以接入真正的搜索API）"""
+        # 这里可以接入真正的搜索API，如Serper、Google Search等
+        # 目前先返回一个提示信息
+        return "（注：此回答基于大模型的通用知识，如需更准确的信息建议联网搜索）"
+
+    def ask_question(self, question: str) -> Dict[str, Any]:
+        """提问并获取答案"""
+        # 搜索相关文档
+        similar_docs = self.search_similar_documents(question)
+
+        if similar_docs:
+            # 有相关文档，基于上下文生成答案
+            answer = self.generate_answer_with_context(question, similar_docs)
+            confidence = sum(doc["similarity"] for doc in similar_docs) / len(similar_docs)
+
+            return {
+                "answer": answer,
+                "sources": [{"content": doc["content"][:200] + "...", "similarity": doc["similarity"]} for doc in
+                            similar_docs],
+                "confidence": confidence,
+                "source_type": "knowledge_base"
+            }
+        else:
+            # 没有相关文档，使用LLM的一般知识回答
+            answer = self.generate_answer_without_context(question)
+            web_info = self.search_web_knowledge(question)
+
+            return {
+                "answer": f"{answer}\n\n{web_info}",
+                "sources": [],
+                "confidence": 0.3,  # 通用知识的置信度较低
+                "source_type": "general_knowledge"
+            }

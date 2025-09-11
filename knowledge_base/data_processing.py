@@ -1,69 +1,123 @@
-import os
-import re
 import numpy as np
+from typing import List, Dict, Any
+import os
+import pandas as pd
 from sentence_transformers import SentenceTransformer
-from config import config
+from config import Config  # 正确的导入方式
 
 
 class DataProcessor:
-    def __init__(self, model_name=None):
-        self.model_name = model_name or config.EMBEDDING_MODEL
-        self.model = SentenceTransformer(self.model_name)
+    def __init__(self, model_name: str = None):
+        if model_name is None:
+            config = Config()
+            self.model_name = config.EMBEDDING_MODEL
+        else:
+            self.model_name = model_name
 
-    def load_documents(self, directory_path):
-        """从目录加载文档"""
+        self.model = None
+        print(f"初始化数据处理器，使用模型: {self.model_name}")
+
+    def _load_model(self):
+        """延迟加载模型"""
+        if self.model is None:
+            print("正在加载嵌入模型...")
+            self.model = SentenceTransformer(self.model_name)
+            print("模型加载完成")
+
+    def load_documents(self, data_path: str) -> List[Dict[str, Any]]:
+        """加载多种格式的文档"""
         documents = []
-        if not os.path.exists(directory_path):
+
+        if not os.path.exists(data_path):
+            print(f"数据路径不存在: {data_path}")
             return documents
 
-        for filename in os.listdir(directory_path):
-            file_path = os.path.join(directory_path, filename)
-            if os.path.isfile(file_path) and any(filename.endswith(ext) for ext in config.SUPPORTED_FILE_TYPES):
+        for root, _, files in os.walk(data_path):
+            for file in files:
+                file_path = os.path.join(root, file)
                 try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                        documents.append({
-                            'title': filename,
-                            'content': content,
-                            'chunks': self.split_into_chunks(content)
-                        })
-                    print(f"成功加载文档: {filename}")
+                    if file.endswith(('.txt', '.md', '.rst')):
+                        content = self._load_text_file(file_path)
+                    elif file.endswith('.csv'):
+                        content = self._load_csv_file(file_path)
+                    elif file.endswith(('.xlsx', '.xls')):
+                        content = self._load_excel_file(file_path)
+                    else:
+                        print(f"跳过不支持的文件格式: {file}")
+                        continue
+
+                    documents.append({
+                        "content": content,
+                        "source": file_path,
+                        "type": os.path.splitext(file)[1]
+                    })
+                    print(f"成功加载文件: {file}")
+
                 except Exception as e:
-                    print(f"加载文档 {filename} 时出错: {e}")
+                    print(f"加载文件 {file_path} 时出错: {e}")
+
+        print(f"共加载 {len(documents)} 个文档")
         return documents
 
-    def split_into_chunks(self, text, chunk_size=None, overlap=None):
-        """将文本分割成重叠的块"""
-        chunk_size = chunk_size or config.CHUNK_SIZE
-        overlap = overlap or config.CHUNK_OVERLAP
+    def _load_text_file(self, file_path: str) -> str:
+        """加载文本文件"""
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
 
-        # 按句子分割，保持语义完整性
-        sentences = re.split(r'(?<=[.!?])\s+', text)
+    def _load_csv_file(self, file_path: str) -> str:
+        """加载CSV文件并转换为文本"""
+        try:
+            df = pd.read_csv(file_path)
+            # 将DataFrame转换为描述性文本
+            text = f"CSV文件: {os.path.basename(file_path)}\n"
+            text += f"列名: {', '.join(df.columns)}\n"
+            text += f"行数: {len(df)}\n"
+            text += f"前3行数据:\n{df.head(3).to_string()}\n"
+            return text
+        except Exception as e:
+            return f"读取CSV文件出错: {str(e)}"
+
+    def _load_excel_file(self, file_path: str) -> str:
+        """加载Excel文件并转换为文本"""
+        try:
+            df = pd.read_excel(file_path)
+            text = f"Excel文件: {os.path.basename(file_path)}\n"
+            text += f"列名: {', '.join(df.columns)}\n"
+            text += f"行数: {len(df)}\n"
+            text += f"前3行数据:\n{df.head(3).to_string()}\n"
+            return text
+        except Exception as e:
+            return f"读取Excel文件出错: {str(e)}"
+
+    def chunk_documents(self, documents: List[Dict[str, Any]], chunk_size: int = 500, chunk_overlap: int = 50) -> List[
+        Dict[str, Any]]:
+        """将文档分块"""
         chunks = []
-        current_chunk = []
-        current_length = 0
 
-        for sentence in sentences:
-            sentence_length = len(sentence.split())
-            if current_length + sentence_length > chunk_size and current_chunk:
-                # 保存当前块
-                chunks.append(' '.join(current_chunk))
-                # 保留重叠部分
-                overlap_words = ' '.join(current_chunk).split()[-overlap:]
-                current_chunk = [' '.join(overlap_words)] if overlap > 0 else []
-                current_length = len(current_chunk[0].split()) if current_chunk else 0
+        for doc in documents:
+            content = doc["content"]
+            source = doc["source"]
 
-            current_chunk.append(sentence)
-            current_length += sentence_length
+            # 简单的文本分块
+            words = content.split()
+            for i in range(0, len(words), chunk_size - chunk_overlap):
+                chunk_words = words[i:i + chunk_size]
+                chunk_text = " ".join(chunk_words)
 
-        # 添加最后一个块
-        if current_chunk:
-            chunks.append(' '.join(current_chunk))
+                chunks.append({
+                    "content": chunk_text,
+                    "source": source,
+                    "chunk_index": len(chunks)
+                })
 
+        print(f"文档分块完成，共 {len(chunks)} 个块")
         return chunks
 
-    def generate_embeddings(self, texts):
-        """为文本列表生成嵌入向量"""
-        if not texts:
-            return []
-        return self.model.encode(texts, show_progress_bar=True)
+    def generate_embeddings(self, texts: List[str]) -> np.ndarray:
+        """生成文本嵌入向量"""
+        self._load_model()  # 确保模型已加载
+
+        print(f"正在为 {len(texts)} 个文本生成嵌入...")
+        embeddings = self.model.encode(texts)
+        print("嵌入生成完成")
+        return embeddings
