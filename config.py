@@ -38,7 +38,10 @@ class Config:
     # 搜索配置
     SEARCH_RESULTS_COUNT = int(os.getenv("SEARCH_RESULTS_COUNT", 3))
     TOP_K = SEARCH_RESULTS_COUNT
-    SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", 0.7))
+    SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", 0.5))
+    # 在 Config 类中添加
+    FILE_HASH_DB = os.path.join(DATA_PATH, "file_hashes.json")
+
 
     # Flask配置
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"

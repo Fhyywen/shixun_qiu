@@ -12,7 +12,7 @@ app.config.from_object(Config)
 qa_system = TimeSeriesQA(Config())
 
 # 定义financial文件夹路径
-FINANCIAL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'financial')
+FINANCIAL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data/knowledge_base')
 
 # 确保financial文件夹存在
 Path(FINANCIAL_DIR).mkdir(parents=True, exist_ok=True)
@@ -25,11 +25,23 @@ def index():
 
 @app.route('/ask', methods=['POST'])
 def ask_question():
-    question = request.form.get('question', '')
-    if not question:
-        return jsonify({'error': '请输入问题'})
-
     try:
+        # 尝试从不同的内容类型获取问题
+        if request.is_json:
+            # 处理 application/json 格式
+            data = request.get_json()
+            question = data.get('question', '')
+        else:
+            # 处理 application/x-www-form-urlencoded 格式
+            question = request.form.get('question', '')
+
+        # 如果两种方式都没获取到，尝试从查询参数获取
+        if not question:
+            question = request.args.get('question', '')
+
+        if not question:
+            return jsonify({'error': '请输入问题'})
+
         result = qa_system.ask_question(question)
         response_data = {
             'answer': result['answer'],
@@ -40,7 +52,6 @@ def ask_question():
         return jsonify(response_data)
     except Exception as e:
         return jsonify({'error': f'处理问题时出错: {str(e)}'})
-
 
 @app.route('/health')
 def health_check():

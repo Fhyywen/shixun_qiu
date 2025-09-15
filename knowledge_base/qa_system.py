@@ -68,27 +68,89 @@ class TimeSeriesQA:
                 raise e
 
     def build_knowledge_base(self, data_path: str = None):
-        """构建知识库"""
+        """构建知识库（支持增量更新）"""
         if data_path is None:
-            data_path = self.config.KNOWLEDGE_BASE_PATH  # 使用正确的配置
+            data_path = self.config.KNOWLEDGE_BASE_PATH
 
         print(f"开始构建知识库，数据路径: {data_path}")
 
-        # 检查数据目录是否存在且有文件
-        if not os.path.exists(data_path):
-            print(f"数据路径不存在: {data_path}")
+        # 检查数据目录
+        if not os.path.exists(data_path) or not any(os.scandir(data_path)):
+            print(f"数据路径不存在或为空: {data_path}")
             return 0
 
-        if not any(os.scandir(data_path)):
-            print(f"数据目录为空: {data_path}")
+        # 加载已有的文件哈希记录
+        file_hashes = self._load_file_hashes()
+
+        # 扫描文件并识别变更
+        new_or_modified_files = []
+        all_files = []
+
+        for root, _, files in os.walk(data_path):
+            for file in files:
+                if file.startswith('.'):  # 跳过隐藏文件
+                    continue
+
+                file_path = os.path.join(root, file)
+                all_files.append(file_path)
+
+                # 计算文件哈希
+                current_hash = self._calculate_file_hash(file_path)
+
+                # 检查文件是否新增或修改
+                if file_path not in file_hashes or file_hashes[file_path] != current_hash:
+                    new_or_modified_files.append(file_path)
+                    file_hashes[file_path] = current_hash
+
+        # 删除不存在的文件记录
+        files_to_remove = [f for f in file_hashes.keys() if f not in all_files]
+        for file_path in files_to_remove:
+            if file_path in file_hashes:
+                del file_hashes[file_path]
+            # 从知识库中删除对应文档
+            self._remove_documents_from_source(file_path)
+
+        if not new_or_modified_files and not files_to_remove:
+            print("没有检测到文件变更，跳过构建")
             return 0
 
-        documents = self.processor.load_documents(data_path)
+        print(f"检测到 {len(new_or_modified_files)} 个新增/修改文件，{len(files_to_remove)} 个删除文件")
 
-        if not documents:
-            print("没有找到任何文档，请检查数据路径")
+        # 处理新增/修改的文件
+        documents = []
+        for file_path in new_or_modified_files:
+            try:
+                # 方式1：复用 DataProcessor 已有的细分加载方法（推荐，更高效）
+                file_ext = os.path.splitext(file_path)[1].lower()  # 获取文件后缀（如 .md, .txt）
+                if file_ext in ('.txt', '.md', '.rst', '.markdown'):
+                    # 文本类文件：调用 DataProcessor 的 _load_text_file 方法
+                    content = self.processor._load_text_file(file_path)
+                elif file_ext == '.csv':
+                    # CSV文件：调用 _load_csv_file 方法
+                    content = self.processor._load_csv_file(file_path)
+                elif file_ext in ('.xlsx', '.xls'):
+                    # Excel文件：调用 _load_excel_file 方法
+                    content = self.processor._load_excel_file(file_path)
+                else:
+                    print(f"跳过不支持的文件格式: {file_path}")
+                    continue
+
+                # 将加载的内容添加到文档列表
+                documents.append({
+                    "content": content,
+                    "source": file_path,
+                    "type": file_ext  # 记录文件类型
+                })
+                print(f"加载文件: {file_path}")
+
+            except Exception as e:
+                print(f"加载文件 {file_path} 时出错: {str(e)}")
+
+        if not documents and not files_to_remove:
+            print("没有需要处理的文档")
             return 0
 
+        # 处理文档分块和嵌入
         chunks = self.processor.chunk_documents(documents)
         print(f"文档分块完成，共 {len(chunks)} 个块")
 
@@ -98,15 +160,20 @@ class TimeSeriesQA:
         print("嵌入向量生成完成")
 
         # 准备数据用于存储
-        ids = [f"doc_{i:06d}" for i in range(len(chunks))]  # 格式化的ID
+        ids = [f"doc_{hash(chunk['source'] + str(chunk['chunk_index'])):x}" for chunk in chunks]
         documents_content = [chunk["content"] for chunk in chunks]
         metadatas = [{
             "source": chunk["source"],
             "chunk_index": chunk["chunk_index"],
-            "document_type": os.path.splitext(chunk["source"])[1] if "source" in chunk else "unknown"
+            "document_type": os.path.splitext(chunk["source"])[1] if "source" in chunk else "unknown",
+            "file_hash": file_hashes.get(chunk["source"], "unknown")
         } for chunk in chunks]
 
-        # 存储到ChromaDB
+        # 先删除已修改文件的旧文档
+        for file_path in new_or_modified_files:
+            self._remove_documents_from_source(file_path)
+
+        # 添加新文档到集合
         try:
             self.collection.add(
                 ids=ids,
@@ -114,17 +181,62 @@ class TimeSeriesQA:
                 documents=documents_content,
                 metadatas=metadatas
             )
-            print(f"成功将 {len(chunks)} 个文档块添加到集合")
 
-            # 验证添加的文档数量
+            # 保存文件哈希记录
+            self._save_file_hashes(file_hashes)
+
             count = self.collection.count()
-            print(f"当前集合中的文档总数: {count}")
+            print(f"知识库更新完成，当前文档总数: {count}")
 
             return len(chunks)
 
         except Exception as e:
-            print(f"添加到 ChromaDB 时出错: {e}")
+            print(f"更新知识库时出错: {e}")
             return 0
+
+    def _load_file_hashes(self):
+        """加载文件哈希记录"""
+        if os.path.exists(self.config.FILE_HASH_DB):
+            try:
+                with open(self.config.FILE_HASH_DB, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except:
+                return {}
+        return {}
+
+    def _save_file_hashes(self, file_hashes):
+        """保存文件哈希记录"""
+        os.makedirs(os.path.dirname(self.config.FILE_HASH_DB), exist_ok=True)
+        with open(self.config.FILE_HASH_DB, 'w', encoding='utf-8') as f:
+            json.dump(file_hashes, f, ensure_ascii=False, indent=2)
+
+    def _calculate_file_hash(self, file_path):
+        """计算文件哈希值"""
+        import hashlib
+        hasher = hashlib.md5()
+        try:
+            with open(file_path, 'rb') as f:
+                buf = f.read()
+                hasher.update(buf)
+            return hasher.hexdigest()
+        except:
+            return "error"
+
+    def _remove_documents_from_source(self, source_path):
+        """删除指定来源的所有文档"""
+        try:
+            # 查询所有来自该来源的文档
+            results = self.collection.get(
+                where={"source": source_path},
+                include=["ids"]
+            )
+
+            if results['ids']:
+                self.collection.delete(ids=results['ids'])
+                print(f"已删除 {len(results['ids'])} 个来自 {source_path} 的文档")
+
+        except Exception as e:
+            print(f"删除文档时出错: {e}")
 
     def search_similar_documents(self, query: str, top_k: int = None) -> List[Dict[str, Any]]:
         """搜索相似文档"""
@@ -144,6 +256,7 @@ class TimeSeriesQA:
         if results['documents'] and results['documents'][0]:
             for i in range(len(results['documents'][0])):
                 similarity = 1 - results['distances'][0][i]  # 转换距离为相似度
+                print("similarity=", similarity)
                 if similarity >= self.config.SIMILARITY_THRESHOLD:
                     similar_docs.append({
                         "content": results['documents'][0][i],
@@ -168,7 +281,7 @@ class TimeSeriesQA:
 
 用户问题：{query}
 
-请根据上述知识提供专业、准确的回答。如果信息不足，可以基于你的专业知识进行补充。"""
+不需要额外的回答，只需要给出这个文档所需要的回答即可。"""
 
         messages = [
             {"role": "system", "content": "你是一个时间序列分析专家，擅长金融数据分析、预测建模和统计学习。"},
