@@ -1,6 +1,11 @@
 import os
+import shutil
+
 import chromadb
 from typing import List, Dict, Any
+
+from chromadb import Settings
+
 from knowledge_base.data_processing import DataProcessor
 from knowledge_base.llm_providers import LLMProvider
 from config import Config
@@ -17,22 +22,67 @@ class TimeSeriesQA:
 
         self.processor = DataProcessor(model_name=self.config.EMBEDDING_MODEL)
         self.llm_provider = LLMProvider(self.config)
-        self.chroma_client = chromadb.PersistentClient(path=self.config.CHROMA_DB_PATH)
 
-        # 尝试获取或创建集合
+        # 确保目录存在
+        self._ensure_directories_exist()
+
+        # 初始化 ChromaDB 客户端（修复重复初始化问题）
+        self.client = self._init_chroma_client()
+
+        # 获取或创建集合
+        self.collection = self.client.get_or_create_collection(
+            name=self.config.COLLECTION_NAME,
+            metadata={"hnsw:space": "cosine"}
+        )
+        print(f"ChromaDB 集合 '{self.config.COLLECTION_NAME}' 初始化完成")
+
+    def _ensure_directories_exist(self):
+        """确保必要的目录存在"""
+        os.makedirs(self.config.CHROMA_DB_PATH, exist_ok=True)
+        os.makedirs(self.config.KNOWLEDGE_BASE_PATH, exist_ok=True)
+
+    def _init_chroma_client(self):
+        """初始化 ChromaDB 客户端，处理设置冲突"""
         try:
-            self.collection = self.chroma_client.get_collection("time_series_knowledge")
-            print("连接到现有的向量数据库集合")
-        except:
-            self.collection = self.chroma_client.create_collection("time_series_knowledge")
-            print("创建新的向量数据库集合")
+            # 首先尝试使用默认设置
+            client = chromadb.PersistentClient(
+                path=self.config.CHROMA_DB_PATH,
+                settings=Settings(anonymized_telemetry=False)
+            )
+            return client
+        except ValueError as e:
+            if "different settings" in str(e):
+                print("检测到 ChromaDB 设置冲突，正在清理并重新创建...")
+                # 清理现有数据
+                if os.path.exists(self.config.CHROMA_DB_PATH):
+                    shutil.rmtree(self.config.CHROMA_DB_PATH)
+                    os.makedirs(self.config.CHROMA_DB_PATH, exist_ok=True)
+
+                # 重新创建客户端
+                client = chromadb.PersistentClient(
+                    path=self.config.CHROMA_DB_PATH,
+                    settings=Settings(anonymized_telemetry=False)
+                )
+                return client
+            else:
+                raise e
 
     def build_knowledge_base(self, data_path: str = None):
         """构建知识库"""
         if data_path is None:
-            data_path = self.config.DATA_PATH
+            data_path = self.config.KNOWLEDGE_BASE_PATH  # 使用正确的配置
 
-        print("开始构建知识库...")
+        print(f"开始构建知识库，数据路径: {data_path}")
+
+        # 检查数据目录是否存在且有文件
+        if not os.path.exists(data_path):
+            print(f"数据路径不存在: {data_path}")
+            return 0
+
+        if not any(os.scandir(data_path)):
+            print(f"数据目录为空: {data_path}")
+            return 0
+
         documents = self.processor.load_documents(data_path)
 
         if not documents:
@@ -40,26 +90,41 @@ class TimeSeriesQA:
             return 0
 
         chunks = self.processor.chunk_documents(documents)
-        embeddings = self.processor.generate_embeddings([chunk["content"] for chunk in chunks])
+        print(f"文档分块完成，共 {len(chunks)} 个块")
+
+        # 生成嵌入向量
+        chunk_texts = [chunk["content"] for chunk in chunks]
+        embeddings = self.processor.generate_embeddings(chunk_texts)
+        print("嵌入向量生成完成")
 
         # 准备数据用于存储
-        ids = [f"doc_{i}" for i in range(len(chunks))]
+        ids = [f"doc_{i:06d}" for i in range(len(chunks))]  # 格式化的ID
         documents_content = [chunk["content"] for chunk in chunks]
         metadatas = [{
             "source": chunk["source"],
-            "chunk_index": chunk["chunk_index"]
+            "chunk_index": chunk["chunk_index"],
+            "document_type": os.path.splitext(chunk["source"])[1] if "source" in chunk else "unknown"
         } for chunk in chunks]
 
         # 存储到ChromaDB
-        self.collection.add(
-            ids=ids,
-            embeddings=embeddings.tolist(),
-            documents=documents_content,
-            metadatas=metadatas
-        )
+        try:
+            self.collection.add(
+                ids=ids,
+                embeddings=embeddings.tolist(),
+                documents=documents_content,
+                metadatas=metadatas
+            )
+            print(f"成功将 {len(chunks)} 个文档块添加到集合")
 
-        print(f"知识库构建完成，共处理 {len(chunks)} 个文档块")
-        return len(chunks)
+            # 验证添加的文档数量
+            count = self.collection.count()
+            print(f"当前集合中的文档总数: {count}")
+
+            return len(chunks)
+
+        except Exception as e:
+            print(f"添加到 ChromaDB 时出错: {e}")
+            return 0
 
     def search_similar_documents(self, query: str, top_k: int = None) -> List[Dict[str, Any]]:
         """搜索相似文档"""
