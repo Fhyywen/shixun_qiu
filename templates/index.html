@@ -14,6 +14,7 @@
         </header>
 
         <main>
+            <!-- 问答区域 -->
             <form id="question-form">
                 <div class="input-group">
                     <input type="text" id="question-input" placeholder="请输入关于时间序列预测算法的问题..." autocomplete="off">
@@ -29,10 +30,44 @@
             <div id="loading" class="hidden">
                 <p>正在思考中...</p>
             </div>
+
+            <!-- 文件管理区域 -->
+            <div class="file-manager">
+                <h2>Financial文档管理</h2>
+
+                <!-- 文件上传区域 -->
+                <div class="upload-section">
+                    <h3>上传新文件</h3>
+                    <form id="upload-form" enctype="multipart/form-data">
+                        <input type="file" id="file-upload" accept=".md" />
+                        <button type="submit">上传</button>
+                    </form>
+                </div>
+
+                <!-- 文件列表区域 -->
+                <div class="files-section">
+                    <h3>文件列表</h3>
+                    <div id="files-list">
+                        <!-- 文件列表将通过JS动态加载 -->
+                    </div>
+                </div>
+
+                <!-- 文件编辑区域 -->
+                <div class="edit-section hidden" id="edit-section">
+                    <h3>编辑文件</h3>
+                    <input type="hidden" id="edit-filename" />
+                    <textarea id="file-content" rows="10"></textarea>
+                    <div class="edit-buttons">
+                        <button id="save-edit">保存</button>
+                        <button id="cancel-edit">取消</button>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
     <script>
+        // 问答功能保持不变
         document.getElementById('question-form').addEventListener('submit', async function(e) {
             e.preventDefault();
 
@@ -41,7 +76,6 @@
 
             if (!question) return;
 
-            // 显示加载中
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('answer').innerHTML = '';
             document.getElementById('references').innerHTML = '';
@@ -64,7 +98,6 @@
                 } else {
                     document.getElementById('answer').innerHTML = `<p>${data.answer.replace(/\n/g, '<br>')}</p>`;
 
-                    // 显示参考文献
                     if (data.results && data.results.length > 0) {
                         let referencesHtml = '<h3>参考来源:</h3><ul>';
                         data.results.forEach(result => {
@@ -81,6 +114,174 @@
                 questionInput.value = '';
             }
         });
+
+        // 文件管理功能
+        document.addEventListener('DOMContentLoaded', () => {
+            // 加载文件列表
+            loadFilesList();
+
+            // 上传文件表单提交
+            document.getElementById('upload-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const fileInput = document.getElementById('file-upload');
+                if (!fileInput.files.length) return;
+
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+
+                try {
+                    const response = await fetch('/upload-financial-file', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+                    if (result.error) {
+                        alert(result.error);
+                    } else {
+                        alert('文件上传成功');
+                        loadFilesList();
+                        fileInput.value = '';
+                    }
+                } catch (error) {
+                    alert('上传失败: ' + error.message);
+                }
+            });
+
+            // 取消编辑
+            document.getElementById('cancel-edit').addEventListener('click', () => {
+                document.getElementById('edit-section').classList.add('hidden');
+                document.getElementById('edit-filename').value = '';
+                document.getElementById('file-content').value = '';
+            });
+
+            // 保存编辑
+            document.getElementById('save-edit').addEventListener('click', async () => {
+                const filename = document.getElementById('edit-filename').value;
+                const content = document.getElementById('file-content').value;
+
+                if (!filename || !content) return;
+
+                try {
+                    const response = await fetch('/save-financial-file', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            filename: filename,
+                            content: content
+                        })
+                    });
+
+                    const result = await response.json();
+                    if (result.error) {
+                        alert(result.error);
+                    } else {
+                        alert('文件保存成功');
+                        document.getElementById('edit-section').classList.add('hidden');
+                        loadFilesList();
+                    }
+                } catch (error) {
+                    alert('保存失败: ' + error.message);
+                }
+            });
+        });
+
+        // 加载文件列表
+        async function loadFilesList() {
+            try {
+                const response = await fetch('/list-financial-files');
+                const files = await response.json();
+
+                const filesList = document.getElementById('files-list');
+                filesList.innerHTML = '';
+
+                if (files.error) {
+                    filesList.innerHTML = `<p class="error">${files.error}</p>`;
+                    return;
+                }
+
+                if (files.length === 0) {
+                    filesList.innerHTML = '<p>没有文件</p>';
+                    return;
+                }
+
+                files.forEach(file => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
+                    fileItem.innerHTML = `
+                        <span>${file}</span>
+                        <div class="file-actions">
+                            <button class="edit-btn" data-file="${file}">编辑</button>
+                            <button class="delete-btn" data-file="${file}">删除</button>
+                        </div>
+                    `;
+                    filesList.appendChild(fileItem);
+                });
+
+                // 绑定编辑和删除事件
+                document.querySelectorAll('.edit-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        const filename = e.target.getAttribute('data-file');
+                        await editFile(filename);
+                    });
+                });
+
+                document.querySelectorAll('.delete-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        const filename = e.target.getAttribute('data-file');
+                        if (confirm(`确定要删除 ${filename} 吗?`)) {
+                            await deleteFile(filename);
+                        }
+                    });
+                });
+            } catch (error) {
+                console.error('加载文件列表失败:', error);
+            }
+        }
+
+        // 编辑文件
+        async function editFile(filename) {
+            try {
+                const response = await fetch(`/get-financial-file?filename=${encodeURIComponent(filename)}`);
+                const result = await response.json();
+
+                if (result.error) {
+                    alert(result.error);
+                    return;
+                }
+
+                document.getElementById('edit-filename').value = filename;
+                document.getElementById('file-content').value = result.content;
+                document.getElementById('edit-section').classList.remove('hidden');
+            } catch (error) {
+                alert('加载文件内容失败: ' + error.message);
+            }
+        }
+
+        // 删除文件
+        async function deleteFile(filename) {
+            try {
+                const response = await fetch('/delete-financial-file', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ filename: filename })
+                });
+
+                const result = await response.json();
+                if (result.error) {
+                    alert(result.error);
+                } else {
+                    alert('文件已删除');
+                    loadFilesList();
+                }
+            } catch (error) {
+                alert('删除失败: ' + error.message);
+            }
+        }
     </script>
 </body>
 </html>

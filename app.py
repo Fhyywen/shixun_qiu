@@ -1,13 +1,22 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, abort
 from knowledge_base.qa_system import TimeSeriesQA
 from config import Config
 import os
+import json
+from pathlib import Path
 
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# 初始化问答系统 - 使用正确的初始化方式
+# 初始化问答系统
 qa_system = TimeSeriesQA(Config())
+
+# 定义financial文件夹路径
+FINANCIAL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'financial')
+
+# 确保financial文件夹存在
+Path(FINANCIAL_DIR).mkdir(parents=True, exist_ok=True)
+
 
 @app.route('/')
 def index():
@@ -16,13 +25,7 @@ def index():
 
 @app.route('/ask', methods=['POST'])
 def ask_question():
-    # 同时支持表单和JSON格式的请求
-    if request.is_json:
-        data = request.get_json()
-        question = data.get('question', '')
-    else:
-        question = request.form.get('question', '')
-
+    question = request.form.get('question', '')
     if not question:
         return jsonify({'error': '请输入问题'})
 
@@ -38,69 +41,123 @@ def ask_question():
     except Exception as e:
         return jsonify({'error': f'处理问题时出错: {str(e)}'})
 
+
 @app.route('/health')
 def health_check():
-    """健康检查端点"""
-    return jsonify({'status': 'healthy', 'initialized': True})  # 简化健康检查
+    return jsonify({'status': 'healthy', 'initialized': True})
 
 
 @app.route('/build', methods=['POST'])
 def build_knowledge_base():
-    """构建知识库端点"""
     try:
-        # 检查知识库目录是否有文件
-        knowledge_base_path = qa_system.config.KNOWLEDGE_BASE_PATH
-        if not os.path.exists(knowledge_base_path) or not any(os.scandir(knowledge_base_path)):
-            return jsonify({
-                'success': False,
-                'message': f'知识库目录为空或不存在: {knowledge_base_path}',
-                'directory': knowledge_base_path
-            })
-
         num_chunks = qa_system.build_knowledge_base()
-        if num_chunks > 0:
-            return jsonify({
-                'success': True,
-                'message': f'知识库构建完成，共处理 {num_chunks} 个文档块',
-                'collection': qa_system.config.COLLECTION_NAME,
-                'chroma_db_path': qa_system.config.CHROMA_DB_PATH
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'message': '知识库构建失败，未处理任何文档。请检查日志获取详细信息。'
-            })
+        return jsonify({'message': f'知识库构建完成，共处理 {num_chunks} 个文档块'})
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': f'构建知识库时出错: {str(e)}'
-        })
+        return jsonify({'error': f'构建知识库时出错: {str(e)}'})
 
 
-@app.route('/stats', methods=['GET'])
-def get_stats():
-    """获取知识库统计信息"""
+# 文件管理相关接口
+@app.route('/list-financial-files')
+def list_financial_files():
     try:
-        count = qa_system.collection.count()
-        return jsonify({
-            'success': True,
-            'collection': qa_system.config.COLLECTION_NAME,
-            'document_count': count,
-            'chroma_db_path': qa_system.config.CHROMA_DB_PATH
-        })
+        # 只列出md文件
+        files = [f for f in os.listdir(FINANCIAL_DIR)
+                 if os.path.isfile(os.path.join(FINANCIAL_DIR, f))
+                 and f.lower().endswith('.md')]
+        return jsonify(files)
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': f'获取统计信息时出错: {str(e)}'
-        })
+        return jsonify({'error': f'获取文件列表失败: {str(e)}'})
+
+
+@app.route('/get-financial-file')
+def get_financial_file():
+    filename = request.args.get('filename')
+    if not filename:
+        return jsonify({'error': '文件名不能为空'})
+
+    file_path = os.path.join(FINANCIAL_DIR, filename)
+
+    # 安全检查，确保不会访问到financial文件夹外的文件
+    if not file_path.startswith(FINANCIAL_DIR) or not filename.lower().endswith('.md'):
+        return jsonify({'error': '无效的文件请求'})
+
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return jsonify({'content': content})
+    except Exception as e:
+        return jsonify({'error': f'读取文件失败: {str(e)}'})
+
+
+@app.route('/upload-financial-file', methods=['POST'])
+def upload_financial_file():
+    if 'file' not in request.files:
+        return jsonify({'error': '没有文件部分'})
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': '未选择文件'})
+
+    if file and file.filename.lower().endswith('.md'):
+        try:
+            file_path = os.path.join(FINANCIAL_DIR, file.filename)
+            file.save(file_path)
+            return jsonify({'message': '文件上传成功'})
+        except Exception as e:
+            return jsonify({'error': f'文件上传失败: {str(e)}'})
+    else:
+        return jsonify({'error': '只允许上传md文件'})
+
+
+@app.route('/delete-financial-file', methods=['POST'])
+def delete_financial_file():
+    data = request.get_json()
+    filename = data.get('filename')
+
+    if not filename:
+        return jsonify({'error': '文件名不能为空'})
+
+    file_path = os.path.join(FINANCIAL_DIR, filename)
+
+    # 安全检查
+    if not file_path.startswith(FINANCIAL_DIR) or not filename.lower().endswith('.md'):
+        return jsonify({'error': '无效的文件请求'})
+
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            return jsonify({'message': '文件已删除'})
+        else:
+            return jsonify({'error': '文件不存在'})
+    except Exception as e:
+        return jsonify({'error': f'删除文件失败: {str(e)}'})
+
+
+@app.route('/save-financial-file', methods=['POST'])
+def save_financial_file():
+    data = request.get_json()
+    filename = data.get('filename')
+    content = data.get('content')
+
+    if not filename or content is None:
+        return jsonify({'error': '文件名和内容不能为空'})
+
+    file_path = os.path.join(FINANCIAL_DIR, filename)
+
+    # 安全检查
+    if not file_path.startswith(FINANCIAL_DIR) or not filename.lower().endswith('.md'):
+        return jsonify({'error': '无效的文件请求'})
+
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        return jsonify({'message': '文件保存成功'})
+    except Exception as e:
+        return jsonify({'error': f'保存文件失败: {str(e)}'})
+
 
 if __name__ == '__main__':
-    # 确保必要的目录存在
     Config.ensure_directories_exist()
-
-    # 初始化知识库（可选，可以在Web界面中手动触发）
-    # qa_system.build_knowledge_base()
-
     app.run(
         debug=Config.DEBUG,
         port=int(os.getenv('PORT', 5000)),

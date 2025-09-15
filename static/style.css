@@ -94,3 +94,62 @@ button:hover {
 .error {
     color: #e74c3c;
 }
+
+/* 现有样式保持不变，添加以下样式 */
+.file-manager {
+    margin-top: 30px;
+    padding: 20px;
+    border-top: 1px solid #ddd;
+}
+
+.upload-section, .files-section, .edit-section {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+}
+
+.file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.file-actions button {
+    margin-left: 10px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+.edit-btn {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 3px;
+}
+
+.delete-btn {
+    background-color: #f44336;
+    color: white;
+    border: none;
+    border-radius: 3px;
+}
+
+#file-content {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.edit-buttons {
+    margin-top: 10px;
+}
+
+.hidden {
+    display: none;
+}
