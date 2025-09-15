@@ -1,5 +1,5 @@
 flask==2.3.3
-sentence-transformers==2.2.2
+sentence-transformers==5.1.0
 faiss-cpu==1.7.4
 numpy==1.24.3
 python-dotenv==1.0.0
@@ -7,3 +7,9 @@ requests==2.31.0
 markdown==3.4.4
 python-multipart==0.0.6
 tqdm==4.66.1
+python==3.9.23
+pandas==2.3.2
+huggingface-hub==0.34.4
+chromadb==1.0.21
+openai==1.107.1
+dashscope==1.24.4
