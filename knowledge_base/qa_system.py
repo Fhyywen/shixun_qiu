@@ -273,22 +273,37 @@ class TimeSeriesQA:
 
     def generate_answer_with_context(self, query: str, context: List[Dict[str, Any]]) -> str:
         """基于上下文生成答案"""
+        #读取template文件 TODO
+        try:
+            with open(self.config.ANSWER_TEMPLATE, 'r', encoding='utf-8') as f:
+                template = f.read()
+            print(f"成功读取模板文件: {self.config.ANSWER_TEMPLATE}")
+            print("文件内容为:",template)
+        except FileNotFoundError:
+            print(f"模板文件不存在: {self.config.ANSWER_TEMPLATE}")
+            template = "# 默认模板\n\n这是一个默认的回答模板。"
+        except Exception as e:
+            print(f"读取模板文件时出错: {e}")
+            template = "# 错误\n\n无法加载模板文件。"
+
+
         # 构建上下文
         context_text = "\n\n".join([f"相关文档 {i + 1} (相似度: {doc['similarity']:.2f}):\n{doc['content']}"
                                     for i, doc in enumerate(context)])
 
         # 构建提示词
-        prompt = f"""你是一个时间序列分析专家。基于以下相关知识，请回答用户的问题。
+        prompt = f"""你是一个社会调研专家。基于以下相关知识，请回答用户的问题。
 
 相关背景知识：
 {context_text}
-
+套用模板：
+{template}
 用户问题：{query}
 
-不需要额外的回答，只需要给出这个文档所需要的回答即可。"""
+使用模板结合背景知识来生成回答。"""
 
         messages = [
-            {"role": "system", "content": "你是一个时间序列分析专家，擅长金融数据分析、预测建模和统计学习。"},
+            {"role": "system", "content": "你是一个社会调研专家。"},
             {"role": "user", "content": prompt}
         ]
 
@@ -300,14 +315,14 @@ class TimeSeriesQA:
 
     def generate_answer_without_context(self, query: str) -> str:
         """当没有本地上下文时，使用LLM的一般知识回答"""
-        prompt = f"""你是一个时间序列分析专家。请回答以下关于时间序列分析的问题。
+        prompt = f"""你是一个社会调研专家。请回答以下关于社会调研专家的问题。
 
 用户问题：{query}
 
 请基于你的专业知识提供准确、专业的回答。如果你是推测或不确定，请说明。"""
 
         messages = [
-            {"role": "system", "content": "你是一个时间序列分析专家，擅长金融数据分析、预测建模和统计学习。"},
+            {"role": "system", "content": "你是一个社会调研专家。"},
             {"role": "user", "content": prompt}
         ]
 

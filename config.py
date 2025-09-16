@@ -41,7 +41,7 @@ class Config:
     SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", 0.5))
     # 在 Config 类中添加
     FILE_HASH_DB = os.path.join(DATA_PATH, "file_hashes.json")
-
+    ANSWER_TEMPLATE = os.path.join(DATA_PATH, os.getenv("ANSWER_TEMPLATE", "knowledge_base/answer_template.md"))
 
     # Flask配置
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"
