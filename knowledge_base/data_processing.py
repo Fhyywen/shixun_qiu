@@ -24,6 +24,31 @@ class DataProcessor:
             self.model = SentenceTransformer(self.model_name)
             print("模型加载完成")
 
+    def check_existing_documents(self, vector_store, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        检查并向量库中已存在的文档，避免重复处理
+        """
+        unique_documents = []
+        for doc in documents:
+            # 基于文件路径或其他唯一标识符检查是否已存在
+            try:
+                existing = vector_store.get(
+                    where={"source": doc["source"]}
+                    # 移除 include=["documents"]，因为默认会返回 ids
+                    # 如果确实需要 documents 内容，可以使用 include=["documents", "metadatas"]
+                )
+
+                if len(existing['ids']) == 0:
+                    unique_documents.append(doc)
+                else:
+                    print(f"文档已存在，跳过: {doc['source']}")
+            except Exception as e:
+                print(f"检查文档存在性时出错: {e}")
+                # 出错时仍然添加文档，避免遗漏
+                unique_documents.append(doc)
+
+        return unique_documents
+
     def load_documents(self, data_path: str) -> List[Dict[str, Any]]:
         """加载多种格式的文档"""
         documents = []
@@ -42,6 +67,8 @@ class DataProcessor:
                         content = self._load_csv_file(file_path)
                     elif file.endswith(('.xlsx', '.xls')):
                         content = self._load_excel_file(file_path)
+                    elif file.endswith('.docx'):  # 添加Word文档支持
+                        content = self._load_word_file(file_path)
                     else:
                         print(f"跳过不支持的文件格式: {file}")
                         continue
@@ -76,6 +103,33 @@ class DataProcessor:
             return text
         except Exception as e:
             return f"读取CSV文件出错: {str(e)}"
+
+    def _load_word_file(self, file_path: str) -> str:
+        """加载Word文档文件并转换为文本"""
+        try:
+            from docx import Document
+            doc = Document(file_path)
+            text = f"Word文档: {os.path.basename(file_path)}\n"
+            text += "=" * 50 + "\n"
+
+            # 提取段落文本
+            paragraphs = [paragraph.text for paragraph in doc.paragraphs if paragraph.text.strip()]
+            text += "\n".join(paragraphs)
+
+            # 可选：提取表格内容
+            if doc.tables:
+                text += "\n\n文档中的表格:\n"
+                for i, table in enumerate(doc.tables):
+                    text += f"\n表格 {i + 1}:\n"
+                    for row in table.rows:
+                        row_text = " | ".join([cell.text.strip() for cell in row.cells])
+                        text += row_text + "\n"
+
+            return text
+        except ImportError:
+            return f"错误: 未安装python-docx库，无法读取Word文档 {file_path}"
+        except Exception as e:
+            return f"读取Word文档 {file_path} 出错: {str(e)}"
 
     def _load_excel_file(self, file_path: str) -> str:
         """加载Excel文件并转换为文本"""
