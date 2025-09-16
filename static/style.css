@@ -153,3 +153,39 @@ button:hover {
 .hidden {
     display: none;
 }
+
+/* 添加到style.css中 */
+#structure-path {
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: #f0f0f0;
+    border-radius: 4px;
+}
+
+.path-item {
+    color: #3498db;
+    cursor: pointer;
+}
+
+.path-item:hover {
+    text-decoration: underline;
+}
+
+.folder-item {
+    color: #2c3e50;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.build-btn {
+    background-color: #f39c12;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+.build-btn:hover {
+    background-color: #e67e22;
+}

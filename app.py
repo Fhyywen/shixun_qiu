@@ -4,6 +4,7 @@ from config import Config
 import os
 import json
 from pathlib import Path
+from flask import send_from_directory
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -109,9 +110,24 @@ def upload_financial_file():
     if file.filename == '':
         return jsonify({'error': '未选择文件'})
 
+    # 获取目标文件夹路径，默认为根目录
+    folder_path = request.form.get('folder_path', '')
+
     if file and file.filename.lower().endswith('.md'):
         try:
-            file_path = os.path.join(FINANCIAL_DIR, file.filename)
+            # 构建完整文件路径
+            if folder_path:
+                target_dir = os.path.join(FINANCIAL_DIR, folder_path)
+                # 确保目标文件夹存在
+                Path(target_dir).mkdir(parents=True, exist_ok=True)
+                file_path = os.path.join(target_dir, file.filename)
+            else:
+                file_path = os.path.join(FINANCIAL_DIR, file.filename)
+
+            # 安全检查
+            if not file_path.startswith(FINANCIAL_DIR):
+                return jsonify({'error': '无效的文件路径'})
+
             file.save(file_path)
             return jsonify({'message': '文件上传成功'})
         except Exception as e:
@@ -166,6 +182,59 @@ def save_financial_file():
     except Exception as e:
         return jsonify({'error': f'保存文件失败: {str(e)}'})
 
+
+@app.route('/list-financial-structure')
+def list_financial_structure():
+    """获取知识库目录结构（包括文件和文件夹）"""
+    try:
+        def get_directory_structure(root_path):
+            structure = []
+            for entry in os.scandir(root_path):
+                if entry.name.startswith('.'):  # 跳过隐藏文件/文件夹
+                    continue
+
+                item = {
+                    'name': entry.name,
+                    'path': os.path.relpath(entry.path, FINANCIAL_DIR),
+                    'is_dir': entry.is_dir()
+                }
+
+                # 如果是目录，递归获取子目录结构
+                if entry.is_dir():
+                    item['children'] = get_directory_structure(entry.path)
+
+                structure.append(item)
+            return structure
+
+        # 获取目录结构
+        structure = get_directory_structure(FINANCIAL_DIR)
+        return jsonify(structure)
+    except Exception as e:
+        return jsonify({'error': f'获取目录结构失败: {str(e)}'})
+
+
+@app.route('/build-folder', methods=['POST'])
+def build_folder():
+    """编译指定文件夹"""
+    try:
+        data = request.get_json()
+        folder_path = data.get('folder_path')
+
+        if not folder_path:
+            return jsonify({'error': '文件夹路径不能为空'})
+
+        # 构建完整路径
+        full_path = os.path.join(FINANCIAL_DIR, folder_path)
+
+        # 安全检查
+        if not full_path.startswith(FINANCIAL_DIR) or not os.path.isdir(full_path):
+            return jsonify({'error': '无效的文件夹路径'})
+
+        # 调用编译函数
+        num_chunks = qa_system.build_knowledge_base(full_path)
+        return jsonify({'message': f'文件夹编译完成，共处理 {num_chunks} 个文档块'})
+    except Exception as e:
+        return jsonify({'error': f'编译文件夹时出错: {str(e)}'})
 
 if __name__ == '__main__':
     Config.ensure_directories_exist()
