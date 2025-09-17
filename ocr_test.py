@@ -1,10 +1,19 @@
+import os
+import shutil
+
 from paddleocr import PaddleOCR
 
+
+# cache_dir = r"C:\Users\Fhyywen\.paddlex"
+# if os.path.exists(cache_dir):
+#     shutil.rmtree(cache_dir)
+#     print("已清除模型缓存")
 # 初始化 PaddleOCR 实例
 ocr = PaddleOCR(
     use_doc_orientation_classify=False,
     use_doc_unwarping=False,
-    use_textline_orientation=False)
+    use_textline_orientation=False,
+)
 
 # 对示例图像执行 OCR 推理
 result = ocr.predict(

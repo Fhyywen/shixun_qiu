@@ -69,6 +69,8 @@ class DataProcessor:
                         content = self._load_excel_file(file_path)
                     elif file.endswith('.docx'):  # 添加Word文档支持
                         content = self._load_word_file(file_path)
+                    elif file.endswith('.doc'):
+                        content = self._load_doc_file(file_path)
                     else:
                         print(f"跳过不支持的文件格式: {file}")
                         continue
@@ -85,6 +87,59 @@ class DataProcessor:
 
         print(f"共加载 {len(documents)} 个文档")
         return documents
+
+    def _load_doc_file(self, file_path: str) -> str:
+        """加载.doc文件并转换为文本"""
+        try:
+            # 尝试使用win32com读取.doc文件
+            import win32com.client
+
+            text = f"Word文档(.doc): {os.path.basename(file_path)}\n"
+            text += "=" * 50 + "\n"
+
+            # 创建Word应用程序对象
+            word = win32com.client.Dispatch("Word.Application")
+            word.Visible = False  # 不显示Word界面
+
+            try:
+                # 打开文档
+                doc = word.Documents.Open(file_path)
+
+                # 获取文档内容
+                content = doc.Content.Text
+                text += content
+
+                # 关闭文档
+                doc.Close()
+
+            finally:
+                # 退出Word应用程序
+                word.Quit()
+
+            return text
+
+        except ImportError:
+            # 如果win32com不可用，尝试使用antiword（需要安装antiword工具）
+            try:
+                import subprocess
+
+                # 使用antiword提取文本内容
+                result = subprocess.run(['antiword', file_path],
+                                        capture_output=True, text=True, timeout=30)
+
+                if result.returncode == 0:
+                    text = f"Word文档(.doc): {os.path.basename(file_path)}\n"
+                    text += "=" * 50 + "\n"
+                    text += result.stdout
+                    return text
+                else:
+                    return f"使用antiword读取.doc文件失败: {result.stderr}"
+
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                return f"错误: 无法读取.doc文件 {file_path}。请确保已安装win32com或antiword"
+
+        except Exception as e:
+            return f"读取.doc文件 {file_path} 出错: {str(e)}"
 
     def _load_text_file(self, file_path: str) -> str:
         """加载文本文件"""

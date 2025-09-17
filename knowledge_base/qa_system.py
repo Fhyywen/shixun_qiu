@@ -134,6 +134,8 @@ class TimeSeriesQA:
                 elif file_ext == '.docx':  # 添加对Word文档的支持
                     # Word文档：调用 _load_word_file 方法
                     content = self.processor._load_word_file(file_path)
+                elif file.endswith('.doc'):
+                    content = self.processor._load_doc_file(file_path)
                 else:
                     print(f"跳过不支持的文件格式: {file_path}")
                     continue
