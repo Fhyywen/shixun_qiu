@@ -189,3 +189,30 @@ button:hover {
 .build-btn:hover {
     background-color: #e67e22;
 }
+
+.new-folder-section {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px dashed #ccc;
+}
+
+#new-folder-name {
+    padding: 8px;
+    margin-right: 10px;
+    width: 250px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+#create-folder-btn {
+    padding: 8px 15px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#create-folder-btn:hover {
+    background-color: #45a049;
+}

@@ -52,12 +52,19 @@
                     <!-- 修改文件上传区域的accept属性 -->
                     <div id="folder-upload" class="upload-section hidden">
                         <h4>上传文件到当前目录</h4>
-                        <form id="folder-upload-form" enctype="multipart/form-data">
-                            <!-- 扩展支持的文件类型 -->
-                            <input type="file" id="folder-file-upload" accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx" />
-                            <button type="submit">上传</button>
-                        </form>
+                            <form id="folder-upload-form" enctype="multipart/form-data">
+                                <input type="file" id="folder-file-upload" accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx" />
+                                <button type="submit">上传</button>
+                            </form>
+
+                            <!-- 新建文件夹功能移到这里 -->
+                            <div class="new-folder-section">
+                                <h4>新建文件夹</h4>
+                                <input type="text" id="new-folder-name" placeholder="请输入文件夹名称">
+                                <button id="create-folder-btn">创建</button>
+                            </div>
                     </div>
+
                     <div id="structure-list">
                         <!-- 目录结构将通过JS动态加载 -->
                     </div>
@@ -427,6 +434,47 @@ function renderStructureList(structure) {
                 await deleteFile(fullPath);
             }
         });
+    });
+
+    // 新建文件夹按钮点击事件
+    document.getElementById('create-folder-btn').addEventListener('click', async () => {
+        const folderName = document.getElementById('new-folder-name').value.trim();
+        if (!folderName) {
+            alert('请输入文件夹名称');
+            return;
+        }
+
+        // 检查文件夹名称是否包含非法字符
+        if (/[<>:"/\\|?*]/.test(folderName)) {
+            alert('文件夹名称不能包含以下字符: < > : " / \\ | ? *');
+            return;
+        }
+
+        const currentPath = getCurrentPath();
+
+        try {
+            const response = await fetch('/create-folder', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    folder_name: folderName,
+                    parent_path: currentPath
+                })
+            });
+
+            const result = await response.json();
+            if (result.error) {
+                alert(result.error);
+            } else {
+                alert('文件夹创建成功');
+                document.getElementById('new-folder-name').value = '';
+                loadStructure(currentPath); // 刷新当前目录
+            }
+        } catch (error) {
+            alert('创建文件夹失败: ' + error.message);
+        }
     });
 }
 

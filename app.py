@@ -311,6 +311,36 @@ def switch_knowledge_base():
 
     except Exception as e:
         return jsonify({'error': f'切换知识库时出错: {str(e)}'})
+@app.route('/create-folder', methods=['POST'])
+def create_folder():
+    """创建新文件夹"""
+    try:
+        data = request.get_json()
+        folder_name = data.get('folder_name')
+        parent_path = data.get('parent_path', '')
+
+        if not folder_name:
+            return jsonify({'error': '文件夹名称不能为空'})
+
+        # 构建完整路径
+        if parent_path:
+            full_path = os.path.join(FINANCIAL_DIR, parent_path, folder_name)
+        else:
+            full_path = os.path.join(FINANCIAL_DIR, folder_name)
+
+        # 安全检查
+        if not full_path.startswith(FINANCIAL_DIR):
+            return jsonify({'error': '无效的文件夹路径'})
+
+        # 检查文件夹是否已存在
+        if os.path.exists(full_path):
+            return jsonify({'error': '文件夹已存在'})
+
+        # 创建文件夹
+        os.makedirs(full_path, exist_ok=True)
+        return jsonify({'message': '文件夹创建成功'})
+    except Exception as e:
+        return jsonify({'error': f'创建文件夹失败: {str(e)}'})
 
 if __name__ == '__main__':
     Config.ensure_directories_exist()
