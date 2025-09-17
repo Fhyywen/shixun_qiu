@@ -209,15 +209,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// 获取当前路径
+// 修改获取当前路径的函数
 function getCurrentPath() {
+    // 从路径导航的最后一个元素获取完整路径
     const pathItems = document.querySelectorAll('#structure-path .path-item');
-    if (pathItems.length <= 1) return '';
+    if (pathItems.length === 0) return '';
 
-    return Array.from(pathItems)
-        .slice(1)
-        .map(item => item.getAttribute('data-name'))
-        .join('/');
+    // 获取最后一个路径项的data-path属性（这是最准确的当前路径）
+    const lastItem = pathItems[pathItems.length - 1];
+    return lastItem.getAttribute('data-path') || '';
 }
 
 async function loadStructure(path = '') {
@@ -251,7 +251,7 @@ async function loadStructure(path = '') {
     }
 }
 
-// 更新路径导航
+// 更新路径导航--修复
 function updatePathNavigation(currentPath) {
     const pathContainer = document.getElementById('structure-path');
     pathContainer.innerHTML = '';
@@ -275,6 +275,7 @@ function updatePathNavigation(currentPath) {
         separator.textContent = ' / ';
         pathContainer.appendChild(separator);
 
+        // 计算当前部分的完整路径
         fullPath = index === 0 ? part : `${fullPath}/${part}`;
 
         const pathItem = document.createElement('span');
@@ -282,7 +283,14 @@ function updatePathNavigation(currentPath) {
         pathItem.setAttribute('data-path', fullPath);
         pathItem.setAttribute('data-name', part);
         pathItem.textContent = part;
-        pathItem.addEventListener('click', () => loadStructure(fullPath));
+
+        // 修复：使用闭包保存当前fullPath的值
+        (function(currentFullPath) {
+            pathItem.addEventListener('click', () => {
+                loadStructure(currentFullPath);
+            });
+        })(fullPath);
+
         pathContainer.appendChild(pathItem);
     });
 }
