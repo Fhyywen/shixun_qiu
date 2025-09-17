@@ -302,7 +302,7 @@ def switch_knowledge_base():
         if not knowledge_base_path:
             return jsonify({'error': '请提供知识库路径'})
 
-        success = qa_system.load_knowledge_base(knowledge_base_path)
+        success = qa_system.switch_knowledge_base(knowledge_base_path)
 
         if success:
             return jsonify({'message': f'已切换到知识库: {knowledge_base_path}'})
