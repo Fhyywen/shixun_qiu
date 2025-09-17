@@ -67,3 +67,9 @@ TimeSeries-Knowledge-Base/
     ├── build_knowledge_base.py # 知识库构建脚本
     ├── add_document.py         # 文档添加脚本
     └── evaluate_system.py      # 系统评估脚本
+
+ask接口测试用例：
+{
+    "question": "帮我生产一份东城的社会调研报告，限制500字左右，简单一点",
+    "knowledge_base_path": "/data/knowledge_base/test3"
+}
