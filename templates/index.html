@@ -549,7 +549,7 @@
                 </div>
             `;
             document.body.appendChild(modal);
-
+            const basePath = '/data/knowledge_base/';
             // 加载根目录结构
             loadKbBrowserStructure('', modal);
 
@@ -560,7 +560,8 @@
 
             document.getElementById('select-kb-path').addEventListener('click', () => {
                 const currentPath = getKbBrowserCurrentPath(modal);
-                document.getElementById('knowledge-base-path').value = currentPath;
+                const fullPath = basePath + (currentPath ? currentPath : '');
+                document.getElementById('knowledge-base-path').value = fullPath;
                 modal.remove();
             });
         }
