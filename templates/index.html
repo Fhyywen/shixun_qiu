@@ -53,7 +53,7 @@
                     <div id="folder-upload" class="upload-section hidden">
                         <h4>上传文件到当前目录</h4>
                             <form id="folder-upload-form" enctype="multipart/form-data">
-                                <input type="file" id="folder-file-upload" accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx" />
+                                <input type="file" id="folder-file-upload" accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx,.pdf" />
                                 <button type="submit">上传</button>
                             </form>
 
@@ -352,7 +352,7 @@ function renderStructureList(structure) {
     // 显示文件 - 扩展支持的文件类型
     files.forEach(file => {
         // 定义允许的文件扩展名
-        const allowedExtensions = ['.txt', '.md', '.rst', '.csv', '.xlsx', '.xls', '.docx', '.doc'];
+        const allowedExtensions = ['.txt', '.md', '.rst', '.csv', '.xlsx', '.xls', '.docx', '.doc','.pdf'];
         const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
 
         // 确保文件有扩展名且在允许列表中

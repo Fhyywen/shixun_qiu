@@ -19,7 +19,40 @@ FINANCIAL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data/k
 Path(FINANCIAL_DIR).mkdir(parents=True, exist_ok=True)
 
 # 定义允许的文件扩展名（在文件顶部添加）
-ALLOWED_EXTENSIONS = ['.txt', '.md', '.rst', '.csv', '.xlsx', '.xls', '.docx']
+ALLOWED_EXTENSIONS = ['.txt', '.md', '.rst', '.csv', '.xlsx', '.xls', '.docx','.pdf']
+
+# Paddle 依赖安装标记文件
+PADDLE_INSTALL_FLAG = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.paddle_installed')
+
+def ensure_paddle_for_pdf():
+    """首次检测到 PDF 时安装所需的 Paddle 依赖（仅执行一次）。"""
+    try:
+        # 已安装则跳过
+        if os.path.exists(PADDLE_INSTALL_FLAG):
+            return
+
+        # 为避免阻塞主进程，使用子进程依次静默安装
+        import subprocess, sys
+        python_exe = sys.executable
+
+        # 安装 paddlepaddle-gpu（按用户提供的国内源与 CUDA 版本）
+        subprocess.run(
+            [python_exe, '-m', 'pip', 'install', 'paddlepaddle-gpu==3.2.0', '-i', 'https://www.paddlepaddle.org.cn/packages/stable/cu118/'],
+            check=True
+        )
+
+        # 安装 paddleocr[all]
+        subprocess.run(
+            [python_exe, '-m', 'pip', 'install', 'paddleocr[all]'],
+            check=True
+        )
+
+        # 记录安装完成
+        with open(PADDLE_INSTALL_FLAG, 'w', encoding='utf-8') as f:
+            f.write('installed')
+    except Exception:
+        # 不抛到上层避免影响上传流程，可在服务端日志中查看错误
+        pass
 
 @app.route('/')
 def index():
