@@ -345,7 +345,7 @@ function renderStructureList(structure) {
     // 显示文件 - 扩展支持的文件类型
     files.forEach(file => {
         // 定义允许的文件扩展名
-        const allowedExtensions = ['.txt', '.md', '.rst', '.csv', '.xlsx', '.xls', '.docx'];
+        const allowedExtensions = ['.txt', '.md', '.rst', '.csv', '.xlsx', '.xls', '.docx', '.doc'];
         const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
 
         // 确保文件有扩展名且在允许列表中
