@@ -311,6 +311,11 @@ def switch_knowledge_base():
 
     except Exception as e:
         return jsonify({'error': f'切换知识库时出错: {str(e)}'})
+
+@app.route('/get_knowledge_base', methods=['GET'])
+def get_knowledge_base():
+    return jsonify({'knowledge_base': qa_system.get_current_knowledge_base()})
+
 @app.route('/create-folder', methods=['POST'])
 def create_folder():
     """创建新文件夹"""
