@@ -71,6 +71,8 @@ class DataProcessor:
                         content = self._load_word_file(file_path)
                     elif file.endswith('.doc'):
                         content = self._load_doc_file(file_path)
+                    elif file.endswith('.pdf'):
+                        content = self._load_pdf_file(file_path)
                     else:
                         print(f"跳过不支持的文件格式: {file}")
                         continue
@@ -230,3 +232,123 @@ class DataProcessor:
         embeddings = self.model.encode(texts)
         print("嵌入生成完成")
         return embeddings
+
+    def _load_pdf_file(self, file_path: str) -> str:
+        """加载PDF文件文本。优先抽取文本型PDF；扫描件建议结合OCR（可后续增强）。"""
+        try:
+            import pdfplumber
+        except ImportError:
+            return f"错误: 未安装 pdfplumber，无法读取PDF文件 {os.path.basename(file_path)}"
+
+        texts = []
+        try:
+            with pdfplumber.open(file_path) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text() or ''
+                    if page_text.strip():
+                        texts.append(page_text)
+        except Exception as e:
+            return f"读取PDF文件出错: {str(e)}"
+
+        header = f"PDF文件: {os.path.basename(file_path)}\n" + ("=" * 50) + "\n"
+        body = "\n\n".join(texts).strip()
+        if not body:
+            # 未抽取到文本（可能是扫描件）- 尝试OCR回退
+            ocr_text = self._ocr_pdf(file_path)
+            if ocr_text:
+                return header + ocr_text
+            return header + "(未从PDF中提取到文本，且OCR回退失败。请检查PaddleOCR/显卡驱动/依赖安装。)"
+        return header + body
+
+    def _ensure_paddle_ocr(self):
+        """确保 PaddleOCR 可用（按需安装）。"""
+        flag_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.paddle_installed')
+        try:
+            # 已可导入则直接返回
+            try:
+                from paddleocr import PaddleOCR  # noqa: F401
+                return True
+            except Exception:
+                pass
+
+            # 有安装标记但仍不可用，继续尝试导入失败则返回False
+            if os.path.exists(flag_path):
+                try:
+                    from paddleocr import PaddleOCR  # noqa: F401
+                    return True
+                except Exception:
+                    return False
+
+            import subprocess, sys
+            python_exe = sys.executable
+            # 优先安装 GPU 版本（与 app 中保持一致），失败则不抛出
+            subprocess.run([
+                python_exe, '-m', 'pip', 'install', 'paddlepaddle-gpu==3.2.0', '-i',
+                'https://www.paddlepaddle.org.cn/packages/stable/cu118/'
+            ], check=False)
+            subprocess.run([python_exe, '-m', 'pip', 'install', 'paddleocr[all]'], check=False)
+
+            # 再次尝试导入
+            try:
+                from paddleocr import PaddleOCR  # noqa: F401
+                with open(flag_path, 'w', encoding='utf-8') as f:
+                    f.write('installed')
+                return True
+            except Exception:
+                return False
+        except Exception:
+            return False
+
+    def _ocr_pdf(self, file_path: str) -> str:
+        """将PDF渲染为图像并用 PaddleOCR 识别，返回拼接文本。"""
+        # 确保 OCR 依赖就绪
+        if not self._ensure_paddle_ocr():
+            return ''
+
+        try:
+            import fitz  # PyMuPDF
+            from paddleocr import PaddleOCR
+        except Exception:
+            return ''
+
+        try:
+            ocr = PaddleOCR(
+                use_doc_orientation_classify=False,
+                use_doc_unwarping=False,
+                use_textline_orientation=False,
+            )
+
+            doc = fitz.open(file_path)
+            page_texts = []
+            for page in doc:
+                # 渲染为图像（缩放以提升清晰度）
+                mat = fitz.Matrix(2, 2)
+                pix = page.get_pixmap(matrix=mat, alpha=False)
+                img_bytes = pix.tobytes('png')
+
+                # 将字节喂给 OCR（PaddleOCR 支持 numpy 数组/路径；这里用临时字节转换）
+                import numpy as np
+                import cv2
+                nparr = np.frombuffer(img_bytes, np.uint8)
+                img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if img is None:
+                    continue
+
+                result = ocr.ocr(img, cls=False)
+                if not result:
+                    continue
+                # result 结构: [ [ [box, (text, score)], ... ] ]
+                lines = []
+                for line in result[0] if isinstance(result, list) and len(result) > 0 else []:
+                    try:
+                        text = line[1][0]
+                        if text:
+                            lines.append(text)
+                    except Exception:
+                        continue
+                if lines:
+                    page_texts.append("\n".join(lines))
+
+            return "\n\n".join(page_texts).strip()
+        except Exception:
+            return ''

@@ -140,6 +140,8 @@ class TimeSeriesQA:
                     content = self.processor._load_word_file(file_path)
                 elif file.endswith('.doc'):
                     content = self.processor._load_doc_file(file_path)
+                elif file_ext == '.pdf':
+                    content = self.processor._load_pdf_file(file_path)
                 else:
                     print(f"跳过不支持的文件格式: {file_path}")
                     continue

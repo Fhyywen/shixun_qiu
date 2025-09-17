@@ -14,3 +14,6 @@ chromadb==1.0.21
 openai==1.107.1
 dashscope==1.24.4
 python-docx==1.2.0
+pdfplumber==0.11.4
+PyMuPDF==1.24.9
+opencv-python-headless==4.10.0.84
