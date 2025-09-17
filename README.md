@@ -1,3 +1,18 @@
+OCR依赖下载：
+https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/windows-pip.html
+
+https://github.com/PaddlePaddle/PaddleOCR/blob/main/readme/README_cn.md
+
+快捷下载（确保依赖版本与requirement.txt相符）：
+CPU版本：python -m pip install paddlepaddle==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+
+GPU版本：python -m pip install paddlepaddle-gpu==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
+
+python -m pip install "paddleocr[all]"
+
+运行ocr_test.py成功运行即安装完成
+
+
 TimeSeries-Knowledge-Base/
 ├── app.py                      # Flask Web应用主入口
 ├── config.py                   # 应用配置文件
