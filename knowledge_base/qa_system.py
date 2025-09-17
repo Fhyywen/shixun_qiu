@@ -36,6 +36,10 @@ class TimeSeriesQA:
         )
         print(f"ChromaDB 集合 '{self.config.COLLECTION_NAME}' 初始化完成")
 
+        self.current_knowledge_base = self.config.KNOWLEDGE_BASE_PATH
+        self.default_knowledge_base = self.config.KNOWLEDGE_BASE_PATH
+
+
     def _ensure_directories_exist(self):
         """确保必要的目录存在"""
         os.makedirs(self.config.CHROMA_DB_PATH, exist_ok=True)
@@ -340,8 +344,23 @@ class TimeSeriesQA:
         # 目前先返回一个提示信息
         return "（注：此回答基于大模型的通用知识，如需更准确的信息建议联网搜索）"
 
-    def ask_question(self, question: str) -> Dict[str, Any]:
-        """提问并获取答案"""
+    def ask_question(self, question: str, knowledge_base_path: str = None) -> Dict[str, Any]:
+        """提问并获取答案，可指定知识库路径"""
+        # 如果指定了知识库路径且与当前加载的不同，重新构建知识库
+        if knowledge_base_path and knowledge_base_path != getattr(self, 'current_knowledge_base', None):
+            try:
+                print(f"切换到知识库: {knowledge_base_path}")
+                # 使用build_knowledge_base来构建指定路径的知识库
+                processed_count = self.build_knowledge_base(knowledge_base_path)
+                if processed_count > 0:
+                    self.current_knowledge_base = knowledge_base_path
+                    print(f"成功切换到知识库: {knowledge_base_path}")
+                else:
+                    print(f"警告: 知识库 {knowledge_base_path} 没有文档或构建失败，使用当前知识库")
+            except Exception as e:
+                print(f"切换知识库失败: {e}")
+                # 继续使用当前知识库
+
         # 搜索相关文档
         similar_docs = self.search_similar_documents(question)
 
@@ -355,7 +374,8 @@ class TimeSeriesQA:
                 "sources": [{"content": doc["content"][:200] + "...", "similarity": doc["similarity"]} for doc in
                             similar_docs],
                 "confidence": confidence,
-                "source_type": "knowledge_base"
+                "source_type": "knowledge_base",
+                "knowledge_base_used": getattr(self, 'current_knowledge_base', self.default_knowledge_base)
             }
         else:
             # 没有相关文档，使用LLM的一般知识回答
@@ -365,6 +385,49 @@ class TimeSeriesQA:
             return {
                 "answer": f"{answer}\n\n{web_info}",
                 "sources": [],
-                "confidence": 0.3,  # 通用知识的置信度较低
-                "source_type": "general_knowledge"
+                "confidence": 0.3,
+                "source_type": "general_knowledge",
+                "knowledge_base_used": getattr(self, 'current_knowledge_base', self.default_knowledge_base)
             }
+
+    def switch_knowledge_base(self, knowledge_base_path: str) -> Dict[str, Any]:
+        """切换知识库"""
+        try:
+            if not os.path.exists(knowledge_base_path):
+                return {"success": False, "message": f"知识库路径不存在: {knowledge_base_path}"}
+
+            processed_count = self.build_knowledge_base(knowledge_base_path)
+            if processed_count > 0:
+                self.current_knowledge_base = knowledge_base_path
+                return {"success": True, "message": f"成功切换到知识库: {knowledge_base_path}",
+                        "documents_processed": processed_count}
+            else:
+                return {"success": False, "message": f"知识库 {knowledge_base_path} 没有文档或构建失败"}
+
+        except Exception as e:
+            return {"success": False, "message": f"切换知识库时出错: {str(e)}"}
+
+    def get_current_knowledge_base(self) -> str:
+        """获取当前使用的知识库路径"""
+        return getattr(self, 'current_knowledge_base', self.default_knowledge_base)
+
+    def list_available_knowledge_bases(self, base_directory: str = None) -> List[str]:
+        """列出可用的知识库（目录）"""
+        if base_directory is None:
+            base_directory = os.path.dirname(self.default_knowledge_base)
+
+        available_bases = []
+
+        if os.path.exists(base_directory):
+            for item in os.listdir(base_directory):
+                item_path = os.path.join(base_directory, item)
+                if os.path.isdir(item_path) and not item.startswith('.'):
+                    # 检查目录是否包含文档文件
+                    has_documents = any(
+                        not f.startswith('.') and os.path.isfile(os.path.join(item_path, f))
+                        for f in os.listdir(item_path)
+                    )
+                    if has_documents:
+                        available_bases.append(item_path)
+
+        return available_bases

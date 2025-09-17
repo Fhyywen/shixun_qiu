@@ -34,27 +34,64 @@ def ask_question():
             # 处理 application/json 格式
             data = request.get_json()
             question = data.get('question', '')
+            knowledge_base_path = data.get('knowledge_base_path', '')  # 新增：获取知识库路径
+            print("接收到的知识库路径:", knowledge_base_path)
         else:
             # 处理 application/x-www-form-urlencoded 格式
             question = request.form.get('question', '')
+            knowledge_base_path = request.form.get('knowledge_base_path', '')  # 新增：获取知识库路径
 
         # 如果两种方式都没获取到，尝试从查询参数获取
         if not question:
             question = request.args.get('question', '')
+        if not knowledge_base_path:
+            knowledge_base_path = request.args.get('knowledge_base_path', '')  # 新增：从查询参数获取
 
         if not question:
             return jsonify({'error': '请输入问题'})
 
-        result = qa_system.ask_question(question)
+        if not knowledge_base_path:
+            knowledge_base_path = Config().DATA_PATH
+        else:
+            # 转换路径格式（如果是Linux格式的路径，转换为Windows格式）
+            knowledge_base_path = convert_path_format(knowledge_base_path)
+
+        print(f"转换后的知识库路径: {knowledge_base_path}")
+
+        result = qa_system.ask_question(question, knowledge_base_path)  # 传入知识库路径
         response_data = {
             'answer': result['answer'],
             'sources': result['sources'],
             'confidence': result['confidence'],
-            'source_type': result.get('source_type', 'unknown')
+            'source_type': result.get('source_type', 'unknown'),
+            'knowledge_base_used': knowledge_base_path  # 返回使用的知识库路径
         }
         return jsonify(response_data)
     except Exception as e:
         return jsonify({'error': f'处理问题时出错: {str(e)}'})
+
+def convert_path_format(path):
+    """
+    转换路径格式，确保与当前操作系统兼容
+    """
+    # 如果是Linux格式的路径（以/开头）且在Windows系统上
+    if path.startswith('/') and os.name == 'nt':
+        # 移除开头的斜杠并将剩余部分转换为Windows路径
+        if path.startswith('/data/'):
+            # 假设 /data/ 对应 D:/python_pj/shixun_qiu/data/
+            windows_path = path.replace('/data/', 'D:/python_pj/shixun_qiu/data/')
+            windows_path = windows_path.replace('/', '\\')
+            return windows_path
+        else:
+            # 通用转换：将Linux路径转换为绝对路径
+            drive_letter = os.path.splitdrive(os.getcwd())[0]  # 获取当前驱动器
+            windows_path = drive_letter + path.replace('/', '\\')
+            return windows_path
+    else:
+        # 已经是Windows格式或其他情况，直接返回
+        return path
+
+
 
 @app.route('/health')
 def health_check():
@@ -250,6 +287,30 @@ def build_folder():
         return jsonify({'message': f'文件夹编译完成，共处理 {num_chunks} 个文档块'})
     except Exception as e:
         return jsonify({'error': f'编译文件夹时出错: {str(e)}'})
+
+
+# 添加一个专门的路由来切换知识库
+@app.route('/switch_knowledge_base', methods=['POST'])
+def switch_knowledge_base():
+    try:
+        if request.is_json:
+            data = request.get_json()
+            knowledge_base_path = data.get('knowledge_base_path', '')
+        else:
+            knowledge_base_path = request.form.get('knowledge_base_path', '')
+
+        if not knowledge_base_path:
+            return jsonify({'error': '请提供知识库路径'})
+
+        success = qa_system.load_knowledge_base(knowledge_base_path)
+
+        if success:
+            return jsonify({'message': f'已切换到知识库: {knowledge_base_path}'})
+        else:
+            return jsonify({'error': f'切换知识库失败: {knowledge_base_path}'})
+
+    except Exception as e:
+        return jsonify({'error': f'切换知识库时出错: {str(e)}'})
 
 if __name__ == '__main__':
     Config.ensure_directories_exist()
