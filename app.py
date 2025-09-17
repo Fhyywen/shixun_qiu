@@ -18,6 +18,8 @@ FINANCIAL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data/k
 # 确保financial文件夹存在
 Path(FINANCIAL_DIR).mkdir(parents=True, exist_ok=True)
 
+# 定义允许的文件扩展名（在文件顶部添加）
+ALLOWED_EXTENSIONS = ['.txt', '.md', '.rst', '.csv', '.xlsx', '.xls', '.docx']
 
 @app.route('/')
 def index():
@@ -72,10 +74,10 @@ def build_knowledge_base():
 @app.route('/list-financial-files')
 def list_financial_files():
     try:
-        # 只列出md文件
+        # 列出所有允许的文件类型
         files = [f for f in os.listdir(FINANCIAL_DIR)
                  if os.path.isfile(os.path.join(FINANCIAL_DIR, f))
-                 and f.lower().endswith('.md')]
+                 and os.path.splitext(f.lower())[1] in ALLOWED_EXTENSIONS]
         return jsonify(files)
     except Exception as e:
         return jsonify({'error': f'获取文件列表失败: {str(e)}'})
@@ -88,15 +90,21 @@ def get_financial_file():
         return jsonify({'error': '文件名不能为空'})
 
     file_path = os.path.join(FINANCIAL_DIR, filename)
+    file_ext = os.path.splitext(filename.lower())[1]
 
-    # 安全检查，确保不会访问到financial文件夹外的文件
-    if not file_path.startswith(FINANCIAL_DIR) or not filename.lower().endswith('.md'):
+    # 安全检查，确保不会访问到financial文件夹外的文件，且文件类型合法
+    if not file_path.startswith(FINANCIAL_DIR) or file_ext not in ALLOWED_EXTENSIONS:
         return jsonify({'error': '无效的文件请求'})
 
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        return jsonify({'content': content})
+        # 对于文本文件，直接读取内容
+        if file_ext in ['.txt', '.md', '.rst', '.csv']:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return jsonify({'content': content})
+        else:
+            # 对于二进制文件，返回文件存在的标识
+            return jsonify({'message': f'文件 {filename} 存在（二进制文件不返回内容）'})
     except Exception as e:
         return jsonify({'error': f'读取文件失败: {str(e)}'})
 
@@ -112,8 +120,9 @@ def upload_financial_file():
 
     # 获取目标文件夹路径，默认为根目录
     folder_path = request.form.get('folder_path', '')
+    file_ext = os.path.splitext(file.filename.lower())[1]
 
-    if file and file.filename.lower().endswith('.md'):
+    if file and file_ext in ALLOWED_EXTENSIONS:
         try:
             # 构建完整文件路径
             if folder_path:
@@ -133,7 +142,7 @@ def upload_financial_file():
         except Exception as e:
             return jsonify({'error': f'文件上传失败: {str(e)}'})
     else:
-        return jsonify({'error': '只允许上传md文件'})
+        return jsonify({'error': f'只允许上传以下类型的文件: {", ".join(ALLOWED_EXTENSIONS)}'})
 
 
 @app.route('/delete-financial-file', methods=['POST'])
@@ -145,9 +154,10 @@ def delete_financial_file():
         return jsonify({'error': '文件名不能为空'})
 
     file_path = os.path.join(FINANCIAL_DIR, filename)
+    file_ext = os.path.splitext(filename.lower())[1]
 
     # 安全检查
-    if not file_path.startswith(FINANCIAL_DIR) or not filename.lower().endswith('.md'):
+    if not file_path.startswith(FINANCIAL_DIR) or file_ext not in ALLOWED_EXTENSIONS:
         return jsonify({'error': '无效的文件请求'})
 
     try:
@@ -170,18 +180,23 @@ def save_financial_file():
         return jsonify({'error': '文件名和内容不能为空'})
 
     file_path = os.path.join(FINANCIAL_DIR, filename)
+    file_ext = os.path.splitext(filename.lower())[1]
 
     # 安全检查
-    if not file_path.startswith(FINANCIAL_DIR) or not filename.lower().endswith('.md'):
+    if not file_path.startswith(FINANCIAL_DIR) or file_ext not in ALLOWED_EXTENSIONS:
         return jsonify({'error': '无效的文件请求'})
 
     try:
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(content)
-        return jsonify({'message': '文件保存成功'})
+        # 对于文本类文件，直接写入内容
+        if file_ext in ['.txt', '.md', '.rst', '.csv']:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            return jsonify({'message': '文件保存成功'})
+        else:
+            # 对于二进制文件，提示不支持直接编辑
+            return jsonify({'error': f'不支持直接编辑 {file_ext} 类型文件'})
     except Exception as e:
         return jsonify({'error': f'保存文件失败: {str(e)}'})
-
 
 @app.route('/list-financial-structure')
 def list_financial_structure():

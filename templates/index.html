@@ -49,11 +49,12 @@
                     <div id="structure-path">
                         <span class="path-item" data-path="">根目录</span>
                     </div>
-                    <!-- 新增文件夹内上传区域 -->
+                    <!-- 修改文件上传区域的accept属性 -->
                     <div id="folder-upload" class="upload-section hidden">
                         <h4>上传文件到当前目录</h4>
                         <form id="folder-upload-form" enctype="multipart/form-data">
-                            <input type="file" id="folder-file-upload" accept=".md" />
+                            <!-- 扩展支持的文件类型 -->
+                            <input type="file" id="folder-file-upload" accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx" />
                             <button type="submit">上传</button>
                         </form>
                     </div>
@@ -333,24 +334,29 @@ function renderStructureList(structure) {
         listContainer.appendChild(folderItem);
     });
 
-    // 显示文件
+    // 显示文件 - 扩展支持的文件类型
     files.forEach(file => {
-        if (!file.name.toLowerCase().endsWith('.md')) return;
+        // 定义允许的文件扩展名
+        const allowedExtensions = ['.txt', '.md', '.rst', '.csv', '.xlsx', '.xls', '.docx'];
+        const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
 
-        const fileItem = document.createElement('div');
-        fileItem.className = 'file-item';
+        // 确保文件有扩展名且在允许列表中
+        if (ext && allowedExtensions.includes(ext)) {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
 
-        const currentPath = getCurrentPath();
-        const filePath = currentPath;
+            const currentPath = getCurrentPath();
+            const filePath = currentPath;
 
-        fileItem.innerHTML = `
-            <span class="file-name">📄 ${file.name}</span>
-            <div class="file-actions">
-                <button class="edit-btn" data-file="${file.name}" data-path="${filePath}">编辑</button>
-                <button class="delete-btn" data-file="${file.name}" data-path="${filePath}">删除</button>
-            </div>
-        `;
-        listContainer.appendChild(fileItem);
+            fileItem.innerHTML = `
+                <span class="file-name">📄 ${file.name}</span>
+                <div class="file-actions">
+                    <button class="edit-btn" data-file="${file.name}" data-path="${filePath}">编辑</button>
+                    <button class="delete-btn" data-file="${file.name}" data-path="${filePath}">删除</button>
+                </div>
+            `;
+            listContainer.appendChild(fileItem);
+        }
     });
 
     // 绑定文件夹点击事件
