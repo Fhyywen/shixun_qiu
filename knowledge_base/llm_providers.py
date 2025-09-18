@@ -104,6 +104,64 @@ class LLMProvider:
             raise Exception(f"Azure OpenAI API调用失败: {str(e)}")
 
     def stream_response(self, messages: List[Dict[str, str]], **kwargs):
-        """流式响应（可选实现）"""
-        # 可以根据需要实现流式输出
-        pass
+        """基于所选模型提供商的流式响应生成器。
+
+        目前实现 OpenAI 的原生流，逐步产出 content 片段（字符串）。
+        对于未实现流的提供商，将抛出异常。
+        """
+        model_type = self.config.LLM_MODEL.lower()
+
+        if model_type == "openai":
+            try:
+                stream = self.openai_client.chat.completions.create(
+                    model=self.config.OPENAI_MODEL,
+                    messages=messages,
+                    temperature=kwargs.get('temperature', 0.7),
+                    max_tokens=kwargs.get('max_tokens', 1000),
+                    stream=True
+                )
+
+                for event in stream:
+                    if not hasattr(event, 'choices') or not event.choices:
+                        continue
+                    delta = event.choices[0].delta
+                    if delta and getattr(delta, 'content', None):
+                        yield delta.content
+            except Exception as e:
+                raise Exception(f"OpenAI 流式接口调用失败: {str(e)}")
+
+        elif model_type == "tongyi":
+            # 通义千问流式输出
+            try:
+                stream = Generation.call(
+                    model=self.config.TONGYI_MODEL,
+                    messages=messages,
+                    temperature=kwargs.get('temperature', 0.7),
+                    top_p=kwargs.get('top_p', 0.8),
+                    max_tokens=kwargs.get('max_tokens', 2000),
+                    result_format='message',
+                    stream=True,
+                    incremental_output=True
+                )
+
+                for event in stream:
+                    # 正常 token 增量
+                    try:
+                        if getattr(event, 'output', None) and event.output and \
+                           getattr(event.output, 'choices', None) and event.output.choices:
+                            message = event.output.choices[0].message
+                            content = getattr(message, 'content', None)
+                            if content:
+                                yield content
+                    except Exception:
+                        # 忽略单次解析异常，继续流
+                        continue
+            except Exception as e:
+                raise Exception(f"通义千问流式接口调用失败: {str(e)}")
+
+        elif model_type == "azure":
+            # 如需支持 Azure OpenAI 流式，可在此实现 SSE/流式解析
+            raise Exception("当前未实现 Azure 的流式输出")
+
+        else:
+            raise ValueError(f"不支持的模型类型(流式): {model_type}")
