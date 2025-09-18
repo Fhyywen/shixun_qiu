@@ -153,41 +153,42 @@ def list_financial_files():
         return jsonify({'error': f'获取文件列表失败: {str(e)}'})
 
 
-
 @app.route('/upload-financial-file', methods=['POST'])
 def upload_financial_file():
     if 'file' not in request.files:
         return jsonify({'error': '没有文件部分'})
 
-    file = request.files['file']
-    if file.filename == '':
+    files = request.files.getlist('file')  # 获取多个文件
+    if not files or all(file.filename == '' for file in files):
         return jsonify({'error': '未选择文件'})
 
     # 获取目标文件夹路径，默认为根目录
     folder_path = request.form.get('folder_path', '')
-    file_ext = os.path.splitext(file.filename.lower())[1]
 
-    if file and file_ext in ALLOWED_EXTENSIONS:
-        try:
-            # 构建完整文件路径
-            if folder_path:
-                target_dir = os.path.join(FINANCIAL_DIR, folder_path)
-                # 确保目标文件夹存在
-                Path(target_dir).mkdir(parents=True, exist_ok=True)
-                file_path = os.path.join(target_dir, file.filename)
-            else:
-                file_path = os.path.join(FINANCIAL_DIR, file.filename)
+    success_count = 0
+    for file in files:
+        file_ext = os.path.splitext(file.filename.lower())[1]
+        if file and file_ext in ALLOWED_EXTENSIONS:
+            try:
+                # 构建完整文件路径
+                if folder_path:
+                    target_dir = os.path.join(FINANCIAL_DIR, folder_path)
+                    Path(target_dir).mkdir(parents=True, exist_ok=True)
+                    file_path = os.path.join(target_dir, file.filename)
+                else:
+                    file_path = os.path.join(FINANCIAL_DIR, file.filename)
 
-            # 安全检查
-            if not file_path.startswith(FINANCIAL_DIR):
-                return jsonify({'error': '无效的文件路径'})
+                if not file_path.startswith(FINANCIAL_DIR):
+                    continue  # 跳过无效路径的文件
 
-            file.save(file_path)
-            return jsonify({'message': '文件上传成功'})
-        except Exception as e:
-            return jsonify({'error': f'文件上传失败: {str(e)}'})
-    else:
-        return jsonify({'error': f'只允许上传以下类型的文件: {", ".join(ALLOWED_EXTENSIONS)}'})
+                file.save(file_path)
+                success_count += 1
+            except Exception as e:
+                return jsonify({'error': f'文件 {file.filename} 上传失败: {str(e)}'})
+        else:
+            return jsonify({'error': f'文件 {file.filename} 类型不允许: {", ".join(ALLOWED_EXTENSIONS)}'})
+
+    return jsonify({'message': f'成功上传 {success_count} 个文件', 'count': success_count})
 
 
 @app.route('/delete-financial-file', methods=['POST'])

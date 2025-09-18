@@ -48,7 +48,7 @@
                     <div id="folder-upload" class="upload-section hidden">
                         <h4>上传文件到当前目录</h4>
                             <form id="folder-upload-form" enctype="multipart/form-data">
-                                <input type="file" id="folder-file-upload" accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx,.pdf" />
+                                <input type="file" id="folder-file-upload" accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx,.pdf" multiple/>
                                 <button type="submit">上传</button>
                             </form>
 
@@ -171,14 +171,20 @@
 
         // 文件管理相关JS代码
         // 文件夹内上传文件表单提交
+        // 修改文件上传表单提交事件处理
         document.getElementById('folder-upload-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const fileInput = document.getElementById('folder-file-upload');
             if (!fileInput.files.length) return;
 
             const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
-            formData.append('folder_path', getCurrentPath());
+            const currentPath = getCurrentPath();
+
+            // 循环添加所有选中的文件
+            for (let i = 0; i < fileInput.files.length; i++) {
+                formData.append('file', fileInput.files[i]);
+            }
+            formData.append('folder_path', currentPath);
 
             try {
                 const response = await fetch('/upload-financial-file', {
@@ -190,7 +196,7 @@
                 if (result.error) {
                     alert(result.error);
                 } else {
-                    alert('文件上传成功');
+                    alert(`成功上传 ${result.count} 个文件`);
                     loadStructure(getCurrentPath());
                     fileInput.value = '';
                 }
