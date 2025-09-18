@@ -69,6 +69,7 @@
         </main>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
         // 页面加载时获取当前知识库路径
         document.addEventListener('DOMContentLoaded', () => {
@@ -108,7 +109,7 @@
             }
         }
 
-        // 问答功能 - 修改为包含知识库路径
+        // 问答功能（流式 + Markdown 渲染）
         document.getElementById('question-form').addEventListener('submit', async function(e) {
             e.preventDefault();
 
@@ -125,40 +126,74 @@
             document.getElementById('references').innerHTML = '';
 
             try {
-                // 准备请求数据
-                const formData = new URLSearchParams();
-                formData.append('question', question);
-                if (knowledgeBasePath) {
-                    formData.append('knowledge_base_path', knowledgeBasePath);
-                }
+                // 以 SSE 方式读取流式响应
+                const params = new URLSearchParams();
+                params.append('question', question);
+                if (knowledgeBasePath) params.append('knowledge_base_path', knowledgeBasePath);
 
-                const response = await fetch('/ask', {
+                const response = await fetch('/ask_stream', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
                     },
-                    body: formData
+                    body: params
                 });
 
-                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(`HTTP错误: ${response.status}`);
+                }
 
-                if (data.error) {
-                    document.getElementById('answer').innerHTML = `<p class="error">${data.error}</p>`;
-                } else {
-                    // 显示回答和使用的知识库路径
-                    let answerHtml = `<p>${data.answer.replace(/\n/g, '<br>')}</p>`;
-                    if (data.knowledge_base_used) {
-                        answerHtml += `<p class="knowledge-base-used">使用的知识库: ${data.knowledge_base_used}</p>`;
-                    }
-                    document.getElementById('answer').innerHTML = answerHtml;
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+                let mdContent = '';
 
-                    if (data.sources && data.sources.length > 0) {
-                        let referencesHtml = '<h3>参考来源:</h3><ul>';
-                        data.sources.forEach(source => {
-                            referencesHtml += `<li>${source.title} (相似度: ${(1 - source.distance).toFixed(3)})</li>`;
-                        });
-                        referencesHtml += '</ul>';
-                        document.getElementById('references').innerHTML = referencesHtml;
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+
+                    // 解析按 SSE 帧（以"\n\n"分隔，前缀 "data:")
+                    let idx;
+                    while ((idx = buffer.indexOf('\n\n')) !== -1) {
+                        const rawFrame = buffer.slice(0, idx).trim();
+                        buffer = buffer.slice(idx + 2);
+                        if (!rawFrame.startsWith('data:')) continue;
+                        const payload = rawFrame.slice(5);
+                        let frame;
+                        try { frame = JSON.parse(payload); } catch { continue; }
+
+                        if (frame.type === 'chunk') {
+                            mdContent += frame.content || '';
+                            // 流式 Markdown 渲染
+                            document.getElementById('answer').innerHTML = marked.parse(mdContent);
+                        } else if (frame.type === 'end') {
+                            // 显示参考来源与知识库路径
+                            const kb = frame.knowledge_base_used || '';
+                            if (kb) {
+                                const kbInfo = document.createElement('p');
+                                kbInfo.className = 'knowledge-base-used';
+                                kbInfo.textContent = `使用的知识库: ${kb}`;
+                                document.getElementById('answer').appendChild(kbInfo);
+                            }
+
+                            const sources = frame.sources || [];
+                            if (sources.length > 0) {
+                                const ul = document.createElement('ul');
+                                const title = document.createElement('h3');
+                                title.textContent = '参考来源:';
+                                document.getElementById('references').appendChild(title);
+                                sources.forEach(s => {
+                                    const li = document.createElement('li');
+                                    // 兼容不同后端结构: content/similarity 或 title/distance
+                                    const sim = (s.similarity !== undefined) ? s.similarity : (s.distance !== undefined ? (1 - s.distance) : undefined);
+                                    const text = s.title ? `${s.title}${sim !== undefined ? ` (相似度: ${sim.toFixed(3)})` : ''}` : (s.content ? s.content.slice(0, 60) + '...' : JSON.stringify(s));
+                                    li.textContent = text;
+                                    ul.appendChild(li);
+                                });
+                                document.getElementById('references').appendChild(ul);
+                            }
+                        }
                     }
                 }
             } catch (error) {

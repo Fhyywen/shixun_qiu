@@ -5,6 +5,7 @@ import os
 import json
 from pathlib import Path
 from flask import send_from_directory
+from flask import Response, stream_with_context
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -100,6 +101,61 @@ def ask_question():
             'knowledge_base_used': knowledge_base_path  # 返回使用的知识库路径
         }
         return jsonify(response_data)
+    except Exception as e:
+        return jsonify({'error': f'处理问题时出错: {str(e)}'})
+
+
+@app.route('/ask_stream', methods=['POST'])
+def ask_question_stream():
+    """流式返回答案（SSE风格的数据帧，便于前端逐步渲染 Markdown）。"""
+    try:
+        # 兼容 x-www-form-urlencoded 与 application/json
+        if request.is_json:
+            data = request.get_json()
+            question = data.get('question', '')
+            knowledge_base_path = data.get('knowledge_base_path', '')
+        else:
+            question = request.form.get('question', '')
+            knowledge_base_path = request.form.get('knowledge_base_path', '')
+
+        if not question:
+            return jsonify({'error': '请输入问题'})
+
+        if not knowledge_base_path:
+            knowledge_base_path = Config().DATA_PATH
+        else:
+            knowledge_base_path = convert_path_format(knowledge_base_path)
+
+        def generate_frames():
+            # 起始帧
+            yield f"data:{json.dumps({'type': 'start'})}\n\n"
+
+            # 生成完整答案（当前 LLMProvider 不支持原生流，这里按块切分模拟流式输出）
+            result = qa_system.ask_question(question, knowledge_base_path)
+            answer_text = result.get('answer', '')
+
+            # 将答案按固定长度分块输出
+            chunk_size = 120
+            for i in range(0, len(answer_text), chunk_size):
+                chunk = answer_text[i:i + chunk_size]
+                frame = {'type': 'chunk', 'content': chunk}
+                yield f"data:{json.dumps(frame, ensure_ascii=False)}\n\n"
+
+            # 末尾元数据帧（包含来源与使用的知识库路径）
+            meta = {
+                'type': 'end',
+                'sources': result.get('sources', []),
+                'knowledge_base_used': result.get('knowledge_base_used', ''),
+                'confidence': result.get('confidence', 0)
+            }
+            yield f"data:{json.dumps(meta, ensure_ascii=False)}\n\n"
+
+        headers = {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+        }
+        return Response(stream_with_context(generate_frames()), headers=headers)
     except Exception as e:
         return jsonify({'error': f'处理问题时出错: {str(e)}'})
 
