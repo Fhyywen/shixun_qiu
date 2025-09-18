@@ -73,3 +73,6 @@ ask接口测试用例：
     "question": "帮我生产一份东城的社会调研报告，限制500字左右，简单一点",
     "knowledge_base_path": "/data/knowledge_base/test3"
 }
+spacy安装:
+conda install -c conda-forge spacy
+python -m spacy download zh_core_web_sm
