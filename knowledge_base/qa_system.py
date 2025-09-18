@@ -322,11 +322,25 @@ class TimeSeriesQA:
             return f"生成回答时出错: {str(e)}"
 
     def generate_answer_without_context(self, query: str) -> str:
+
+        #读取template文件 TODO
+        try:
+            with open(self.config.ANSWER_TEMPLATE, 'r', encoding='utf-8') as f:
+                template = f.read()
+            print(f"成功读取模板文件: {self.config.ANSWER_TEMPLATE}")
+            print("文件内容为:",template)
+        except FileNotFoundError:
+            print(f"模板文件不存在: {self.config.ANSWER_TEMPLATE}")
+            template = "# 默认模板\n\n这是一个默认的回答模板。"
+        except Exception as e:
+            print(f"读取模板文件时出错: {e}")
+            template = "# 错误\n\n无法加载模板文件。"
+
         """当没有本地上下文时，使用LLM的一般知识回答"""
         prompt = f"""你是一个社会调研专家。请回答以下关于社会调研专家的问题。
 
 用户问题：{query}
-
+使用模板:{template}
 请基于你的专业知识提供准确、专业的回答。如果你是推测或不确定，请说明。"""
 
         messages = [
