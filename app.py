@@ -451,6 +451,47 @@ def create_folder():
     except Exception as e:
         return jsonify({'error': f'创建文件夹失败: {str(e)}'})
 
+
+# 添加模板上传接口
+@app.route('/upload-template', methods=['POST'])
+def upload_template():
+    if 'template_file' not in request.files:
+        return jsonify({'error': '未选择文件'})
+
+    file = request.files['template_file']
+    if file.filename == '':
+        return jsonify({'error': '未选择文件'})
+
+    # 获取文件扩展名
+    file_ext = os.path.splitext(file.filename.lower())[1]
+
+    # 验证文件类型
+    if file_ext not in Config.ALLOWED_TEMPLATE_EXTENSIONS:
+        return jsonify({
+            'error': f'不支持的文件类型，允许的类型: {", ".join(Config.ALLOWED_TEMPLATE_EXTENSIONS)}'
+        })
+
+    try:
+        config = Config()
+        # 保留原始文件扩展名
+        template_filename = f"answer_template{file_ext}"
+        template_path = os.path.join(config.DATA_PATH, "knowledge_base", template_filename)
+
+        # 确保目录存在
+        os.makedirs(os.path.dirname(template_path), exist_ok=True)
+        file.save(template_path)
+
+        # 动态更新配置
+        Config.set_answer_template(template_path)
+
+        return jsonify({
+            'message': f'模板文件上传成功，已保存至: {template_path}',
+            'filename': file.filename,
+            'template_type': file_ext
+        })
+    except Exception as e:
+        return jsonify({'error': f'处理模板文件时出错: {str(e)}'})
+
 if __name__ == '__main__':
     Config.ensure_directories_exist()
     app.run(

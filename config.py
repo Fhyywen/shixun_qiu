@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+import json
 
 load_dotenv()
 
@@ -41,11 +42,18 @@ class Config:
     SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", 0.5))
     # 在 Config 类中添加
     FILE_HASH_DB = os.path.join(DATA_PATH, "file_hashes.json")
-    ANSWER_TEMPLATE = os.path.join(DATA_PATH, os.getenv("ANSWER_TEMPLATE", "knowledge_base/answer_template.md"))
+
 
     # Flask配置
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
+
+    # 模板文件配置 - 改为可动态设置
+    ANSWER_TEMPLATE = os.getenv("ANSWER_TEMPLATE", "knowledge_base/answer_template.md")
+
+    # 新增模板文件类型验证配置
+    ALLOWED_TEMPLATE_EXTENSIONS = {'.txt', '.md', '.rst', '.csv', '.xlsx', '.xls', '.docx', '.pdf'}
+    CONFIG_FILE = "config.json"
 
     @classmethod
     def ensure_directories_exist(cls):
@@ -68,3 +76,41 @@ class Config:
         print("配置初始化完成")
         print(f"知识库路径: {cls.KNOWLEDGE_BASE_PATH}")
         print(f"ChromaDB 路径: {cls.CHROMA_DB_PATH}")
+
+
+    @classmethod
+    def load_config(cls):
+        """启动时加载保存的配置"""
+        if os.path.exists(cls.CONFIG_FILE):
+            with open(cls.CONFIG_FILE, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+                # 读取保存的模板路径（如果存在）
+                if "answer_template_path" in config_data:
+                    cls.ANSWER_TEMPLATE = config_data["answer_template_path"]
+        else:
+            # 首次运行，使用默认路径并创建配置文件
+            cls.ANSWER_TEMPLATE = "knowledge_base/answer_template.md"
+            cls.save_config()
+
+    @classmethod
+    def save_config(cls):
+        """保存当前配置到文件"""
+        config_data = {
+            "answer_template_path": cls.ANSWER_TEMPLATE
+        }
+        with open(cls.CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(config_data, f, ensure_ascii=False, indent=2)
+
+    @classmethod
+    def set_answer_template(cls, template_path):
+        """动态设置模板路径并保存"""
+        ext = os.path.splitext(template_path.lower())[1]
+        if ext in cls.ALLOWED_TEMPLATE_EXTENSIONS:
+            cls.ANSWER_TEMPLATE = template_path
+            cls.save_config()
+            return True
+        return False
+
+
+# 程序启动时自动加载配置
+Config.load_config()

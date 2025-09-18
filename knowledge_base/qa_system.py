@@ -283,8 +283,7 @@ class TimeSeriesQA:
         """基于上下文生成答案"""
         #读取template文件 TODO
         try:
-            with open(self.config.ANSWER_TEMPLATE, 'r', encoding='utf-8') as f:
-                template = f.read()
+            template = self._read_template_file()
             print(f"成功读取模板文件: {self.config.ANSWER_TEMPLATE}")
             print("文件内容为:",template)
         except FileNotFoundError:
@@ -325,8 +324,7 @@ class TimeSeriesQA:
 
         #读取template文件 TODO
         try:
-            with open(self.config.ANSWER_TEMPLATE, 'r', encoding='utf-8') as f:
-                template = f.read()
+            template = self._read_template_file()
             print(f"成功读取模板文件: {self.config.ANSWER_TEMPLATE}")
             print("文件内容为:",template)
         except FileNotFoundError:
@@ -447,3 +445,31 @@ class TimeSeriesQA:
                         available_bases.append(item_path)
 
         return available_bases
+
+    def _read_template_file(self):
+        """读取模板文件，保持原格式处理"""
+        try:
+            file_ext = os.path.splitext(self.config.ANSWER_TEMPLATE.lower())[1]
+            print(f"读取模板文件: {self.config.ANSWER_TEMPLATE} (格式: {file_ext})")
+
+            # 根据文件类型使用对应读取方法
+            if file_ext in ('.txt', '.md', '.rst', '.markdown'):
+                with open(self.config.ANSWER_TEMPLATE, 'r', encoding='utf-8') as f:
+                    return f.read()
+            elif file_ext == '.csv':
+                return self.processor._load_csv_file(self.config.ANSWER_TEMPLATE)
+            elif file_ext in ('.xlsx', '.xls'):
+                return self.processor._load_excel_file(self.config.ANSWER_TEMPLATE)
+            elif file_ext == '.docx':
+                return self.processor._load_word_file(self.config.ANSWER_TEMPLATE)
+            elif file_ext == '.pdf':
+                return self.processor._load_pdf_file(self.config.ANSWER_TEMPLATE)
+            else:
+                raise ValueError(f"不支持的模板文件格式: {file_ext}")
+
+        except FileNotFoundError:
+            print(f"模板文件不存在: {self.config.ANSWER_TEMPLATE}")
+            return "# 默认模板\n\n这是一个默认的回答模板。"
+        except Exception as e:
+            print(f"读取模板文件时出错: {e}")
+            return "# 错误\n\n无法加载模板文件。"
