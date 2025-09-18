@@ -153,31 +153,6 @@ def list_financial_files():
         return jsonify({'error': f'获取文件列表失败: {str(e)}'})
 
 
-@app.route('/get-financial-file')
-def get_financial_file():
-    filename = request.args.get('filename')
-    if not filename:
-        return jsonify({'error': '文件名不能为空'})
-
-    file_path = os.path.join(FINANCIAL_DIR, filename)
-    file_ext = os.path.splitext(filename.lower())[1]
-
-    # 安全检查，确保不会访问到financial文件夹外的文件，且文件类型合法
-    if not file_path.startswith(FINANCIAL_DIR) or file_ext not in ALLOWED_EXTENSIONS:
-        return jsonify({'error': '无效的文件请求'})
-
-    try:
-        # 对于文本文件，直接读取内容
-        if file_ext in ['.txt', '.md', '.rst', '.csv']:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            return jsonify({'content': content})
-        else:
-            # 对于二进制文件，返回文件存在的标识
-            return jsonify({'message': f'文件 {filename} 存在（二进制文件不返回内容）'})
-    except Exception as e:
-        return jsonify({'error': f'读取文件失败: {str(e)}'})
-
 
 @app.route('/upload-financial-file', methods=['POST'])
 def upload_financial_file():
@@ -240,33 +215,6 @@ def delete_financial_file():
         return jsonify({'error': f'删除文件失败: {str(e)}'})
 
 
-@app.route('/save-financial-file', methods=['POST'])
-def save_financial_file():
-    data = request.get_json()
-    filename = data.get('filename')
-    content = data.get('content')
-
-    if not filename or content is None:
-        return jsonify({'error': '文件名和内容不能为空'})
-
-    file_path = os.path.join(FINANCIAL_DIR, filename)
-    file_ext = os.path.splitext(filename.lower())[1]
-
-    # 安全检查
-    if not file_path.startswith(FINANCIAL_DIR) or file_ext not in ALLOWED_EXTENSIONS:
-        return jsonify({'error': '无效的文件请求'})
-
-    try:
-        # 对于文本类文件，直接写入内容
-        if file_ext in ['.txt', '.md', '.rst', '.csv']:
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-            return jsonify({'message': '文件保存成功'})
-        else:
-            # 对于二进制文件，提示不支持直接编辑
-            return jsonify({'error': f'不支持直接编辑 {file_ext} 类型文件'})
-    except Exception as e:
-        return jsonify({'error': f'保存文件失败: {str(e)}'})
 
 @app.route('/list-financial-structure')
 def list_financial_structure():

@@ -64,17 +64,7 @@
                     </div>
                 </div>
 
-                <!-- 文件编辑区域 -->
-                <div class="edit-section hidden" id="edit-section">
-                    <h3>编辑文件</h3>
-                    <input type="hidden" id="edit-filename" />
-                    <input type="hidden" id="edit-filepath" />
-                    <textarea id="file-content" rows="10"></textarea>
-                    <div class="edit-buttons">
-                        <button id="save-edit">保存</button>
-                        <button id="cancel-edit">取消</button>
-                    </div>
-                </div>
+
             </div>
         </main>
     </div>
@@ -206,49 +196,6 @@
                 }
             } catch (error) {
                 alert('上传失败: ' + error.message);
-            }
-        });
-
-        // 取消编辑
-        document.getElementById('cancel-edit').addEventListener('click', () => {
-            document.getElementById('edit-section').classList.add('hidden');
-            document.getElementById('edit-filename').value = '';
-            document.getElementById('edit-filepath').value = '';
-            document.getElementById('file-content').value = '';
-        });
-
-        // 保存编辑
-        document.getElementById('save-edit').addEventListener('click', async () => {
-            const filename = document.getElementById('edit-filename').value;
-            const filepath = document.getElementById('edit-filepath').value;
-            const content = document.getElementById('file-content').value;
-
-            if (!filename || !content) return;
-
-            const fullPath = filepath ? `${filepath}/${filename}` : filename;
-
-            try {
-                const response = await fetch('/save-financial-file', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        filename: fullPath,
-                        content: content
-                    })
-                });
-
-                const result = await response.json();
-                if (result.error) {
-                    alert(result.error);
-                } else {
-                    alert('文件保存成功');
-                    document.getElementById('edit-section').classList.add('hidden');
-                    loadStructure(getCurrentPath());
-                }
-            } catch (error) {
-                alert('保存失败: ' + error.message);
             }
         });
 
@@ -408,6 +355,7 @@
                 listContainer.appendChild(folderItem);
             });
 
+            <!-- 修改后 -->
             files.forEach(file => {
                 const allowedExtensions = ['.txt', '.md', '.rst', '.csv', '.xlsx', '.xls', '.docx', '.doc','.pdf'];
                 const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
@@ -422,7 +370,6 @@
                     fileItem.innerHTML = `
                         <span class="file-name">📄 ${file.name}</span>
                         <div class="file-actions">
-                            <button class="edit-btn" data-file="${file.name}" data-path="${filePath}">编辑</button>
                             <button class="delete-btn" data-file="${file.name}" data-path="${filePath}">删除</button>
                         </div>
                     `;
@@ -465,14 +412,7 @@
                 });
             });
 
-            document.querySelectorAll('.edit-btn').forEach(btn => {
-                btn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    const filename = e.target.getAttribute('data-file');
-                    const filepath = e.target.getAttribute('data-path');
-                    await editFile(filename, filepath);
-                });
-            });
+
 
             document.querySelectorAll('.delete-btn').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
@@ -489,25 +429,6 @@
             });
         }
 
-        async function editFile(filename, filepath) {
-            try {
-                const fullPath = filepath ? `${filepath}/${filename}` : filename;
-                const response = await fetch(`/get-financial-file?filename=${encodeURIComponent(fullPath)}`);
-                const result = await response.json();
-
-                if (result.error) {
-                    alert(result.error);
-                    return;
-                }
-
-                document.getElementById('edit-filename').value = filename;
-                document.getElementById('edit-filepath').value = filepath;
-                document.getElementById('file-content').value = result.content;
-                document.getElementById('edit-section').classList.remove('hidden');
-            } catch (error) {
-                alert('加载文件内容失败: ' + error.message);
-            }
-        }
 
         async function deleteFile(filename) {
             try {
