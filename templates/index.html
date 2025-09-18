@@ -14,6 +14,15 @@
         </header>
 
         <main>
+            <div class="template-upload-section">
+                    <h4>上传回答模板文件</h4>
+                    <form id="template-upload-form" enctype="multipart/form-data">
+                        <input type="file" id="template-file-upload"
+                               accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx,.pdf" />
+                        <button type="submit">上传模板</button>
+                        <p class="template-info">上传后将替换当前回答模板，支持多种格式</p>
+                    </form>
+            </div>
             <!-- 问答区域 -->
             <form id="question-form">
                 <div class="knowledge-base-selector">
@@ -237,6 +246,37 @@
                 }
             } catch (error) {
                 alert('上传失败: ' + error.message);
+            }
+        });
+
+        // 模板文件上传处理 - 修复选择器
+        document.querySelector('#template-upload-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('template-file-upload');
+            if (!fileInput.files.length) {
+                alert('请选择模板文件');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('template_file', fileInput.files[0]);
+
+            try {
+                const response = await fetch('/upload-template', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                if (result.error) {
+                    alert(`上传失败: ${result.error}`);
+                } else {
+                    alert('模板上传成功，已应用新模板');
+                    // 清空输入
+                    fileInput.value = '';
+                }
+            } catch (error) {
+                alert('模板上传失败: ' + error.message);
             }
         });
 
