@@ -51,11 +51,15 @@
 
         @media (min-width: 992px) {
             main {
-                grid-template-columns: 1fr 1fr;
                 grid-template-areas:
                     "template kb-selector"
-                    "answer answer"
+                    "loading loading" /* 加载区域在上 */
+                    "answer answer"   /* 回答区域在下 */
                     "file-manager file-manager";
+            }
+
+            #loading-container {
+                grid-area: loading;
             }
 
             .template-upload-section {
@@ -219,13 +223,10 @@
         /* 加载动画 */
         #loading {
             text-align: center;
-            padding: 25px; /* 与answer-container保持相同内边距 */
+            padding: 25px;
             background: white;
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-            margin-bottom: 30px; /* 与下方元素保持间距 */
-            /* 添加与answer-container相同的网格区域设置 */
-            grid-area: answer;
         }
 
         #loading p {
@@ -488,4 +489,7 @@
             margin-top: 10px;
             color: #6c757d;
             font-size: 0.9rem;
+        }
+        #loading-container {
+            margin-bottom: 20px; /* 与回答区域保持距离 */
         }

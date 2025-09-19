@@ -38,14 +38,18 @@
                 </div>
             </form>
 
+            <div id="loading-container" class="hidden">
+                <div id="loading">
+                    <p>正在思考中...</p>
+                </div>
+            </div>
+
             <div id="answer-container">
                 <div id="answer"></div>
                 <div id="references"></div>
             </div>
 
-            <div id="loading" class="hidden">
-                <p>正在思考中...</p>
-            </div>
+
 
             <!-- 文件管理区域 -->
             <div class="file-manager">
@@ -119,6 +123,7 @@
         }
 
         // 问答功能（流式 + Markdown 渲染）
+        // 修改JS中的显示逻辑
         document.getElementById('question-form').addEventListener('submit', async function(e) {
             e.preventDefault();
 
@@ -130,12 +135,16 @@
 
             if (!question) return;
 
-            document.getElementById('loading').classList.remove('hidden');
+            // 重置状态
             document.getElementById('answer').innerHTML = '';
             document.getElementById('references').innerHTML = '';
 
+            // 显示loading，同时确保回答区域可见以便展示流式内容
+            document.getElementById('loading-container').classList.remove('hidden');
+            document.getElementById('answer-container').classList.remove('hidden');
+
             try {
-                // 以 SSE 方式读取流式响应
+                // 以SSE方式读取流式响应（保持不变）
                 const params = new URLSearchParams();
                 params.append('question', question);
                 if (knowledgeBasePath) params.append('knowledge_base_path', knowledgeBasePath);
@@ -162,7 +171,7 @@
                     if (done) break;
                     buffer += decoder.decode(value, { stream: true });
 
-                    // 解析按 SSE 帧（以"\n\n"分隔，前缀 "data:")
+                    // 解析SSE帧（保持不变）
                     let idx;
                     while ((idx = buffer.indexOf('\n\n')) !== -1) {
                         const rawFrame = buffer.slice(0, idx).trim();
@@ -174,10 +183,12 @@
 
                         if (frame.type === 'chunk') {
                             mdContent += frame.content || '';
-                            // 流式 Markdown 渲染
+                            // 实时渲染流式内容
                             document.getElementById('answer').innerHTML = marked.parse(mdContent);
+                            // 自动滚动到底部，方便查看新内容
+                            document.getElementById('answer').scrollTop = document.getElementById('answer').scrollHeight;
                         } else if (frame.type === 'end') {
-                            // 显示参考来源与知识库路径
+                            // 处理结束帧（保持不变）
                             const kb = frame.knowledge_base_used || '';
                             if (kb) {
                                 const kbInfo = document.createElement('p');
@@ -194,7 +205,6 @@
                                 document.getElementById('references').appendChild(title);
                                 sources.forEach(s => {
                                     const li = document.createElement('li');
-                                    // 兼容不同后端结构: content/similarity 或 title/distance
                                     const sim = (s.similarity !== undefined) ? s.similarity : (s.distance !== undefined ? (1 - s.distance) : undefined);
                                     const text = s.title ? `${s.title}${sim !== undefined ? ` (相似度: ${sim.toFixed(3)})` : ''}` : (s.content ? s.content.slice(0, 60) + '...' : JSON.stringify(s));
                                     li.textContent = text;
@@ -208,7 +218,8 @@
             } catch (error) {
                 document.getElementById('answer').innerHTML = `<p class="error">请求失败: ${error.message}</p>`;
             } finally {
-                document.getElementById('loading').classList.add('hidden');
+                // 隐藏loading，保留回答区域
+                document.getElementById('loading-container').classList.add('hidden');
                 questionInput.value = '';
             }
         });
