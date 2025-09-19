@@ -7,6 +7,7 @@ from typing import List, Dict, Any
 from chromadb import Settings
 
 from knowledge_base.data_processing import DataProcessor
+from knowledge_base.knowledge_base_analyzer import KnowledgeBaseAnalyzer
 from knowledge_base.llm_providers import LLMProvider
 from config import Config
 import requests
@@ -279,7 +280,7 @@ class TimeSeriesQA:
 
         return similar_docs
 
-    def generate_answer_with_context(self, query: str, context: List[Dict[str, Any]]) -> str:
+    def generate_answer_with_context(self, query: str, context: List[Dict[str, Any]],report: List[Dict[str, Any]]) -> str:
         """基于上下文生成答案"""
         #读取template文件 TODO
         try:
@@ -293,6 +294,7 @@ class TimeSeriesQA:
             print(f"读取模板文件时出错: {e}")
             template = "# 错误\n\n无法加载模板文件。"
 
+        print("数据参考:",report)
 
         # 构建上下文
         context_text = "\n\n".join([f"相关文档 {i + 1} (相似度: {doc['similarity']:.2f}):\n{doc['content']}"
@@ -305,9 +307,11 @@ class TimeSeriesQA:
 {context_text}
 套用模板：
 {template}
+参考数据：
+{report}
 用户问题：{query}
 
-使用模板结合背景知识来生成回答。"""
+使用模板结合背景知识来生成回答，并且在模板里面引用相关数据，具体数据用参考数据里面的数据。"""
 
         messages = [
             {"role": "system", "content": "你是一个社会调研专家。"},
@@ -358,7 +362,57 @@ class TimeSeriesQA:
         # 目前先返回一个提示信息
         return "（注：此回答基于大模型的通用知识，如需更准确的信息建议联网搜索）"
 
+    def analyze_knowledge_base(self, knowledge_base_path: str = None) -> Dict[str, Any]:
+        """分析知识库"""
+        try:
+            # 验证输入路径
+            if not knowledge_base_path:
+                return {"status": "error", "message": "知识库路径不能为空"}
+
+            # 正确处理路径（移除可能的重复..）
+            clean_path = os.path.normpath(knowledge_base_path.replace("..", ""))
+
+            # 检查路径是否存在
+            if not os.path.exists(clean_path):
+                return {"status": "error", "message": f"知识库路径不存在: {clean_path}"}
+
+            # 创建分析器实例
+            analyzer = KnowledgeBaseAnalyzer()
+
+            # 先进行分析
+            print("开始分析知识库...")
+            stats = analyzer.analyze_knowledge_base(clean_path)
+
+            # 检查是否有错误
+            if "error" in stats:
+                error_msg = f"分析失败: {stats['error']}"
+                print(error_msg)
+                return {"status": "error", "message": error_msg}
+            else:
+                print("分析完成！")
+
+                # 获取统计报告
+                report = analyzer.get_statistics_report()
+                print(report)
+
+                # 确保返回完整的报告信息
+                return {
+                    "status": "success",
+                    "message": "知识库分析完成",
+                    "data": report,
+                    "stats": stats
+                }
+
+        except Exception as e:
+            # 捕获任何未预期的异常
+            error_msg = f"分析过程中发生未预期错误: {str(e)}"
+            print(error_msg)
+            return {"status": "error", "message": error_msg}
+
     def ask_question(self, question: str, knowledge_base_path: str = None) -> Dict[str, Any]:
+
+        report = self.analyze_knowledge_base(knowledge_base_path)
+
         """提问并获取答案，可指定知识库路径"""
         # 如果指定了知识库路径且与当前加载的不同，重新构建知识库
         if knowledge_base_path and knowledge_base_path != getattr(self, 'current_knowledge_base', None):
@@ -380,7 +434,7 @@ class TimeSeriesQA:
 
         if similar_docs:
             # 有相关文档，基于上下文生成答案
-            answer = self.generate_answer_with_context(question, similar_docs)
+            answer = self.generate_answer_with_context(question, similar_docs, report)
             confidence = sum(doc["similarity"] for doc in similar_docs) / len(similar_docs)
 
             return {
