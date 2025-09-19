@@ -108,53 +108,6 @@ def ask_question():
     except Exception as e:
         return jsonify({'error': f'处理问题时出错: {str(e)}'})
 
-def analyze_knowledge_base(knowledge_base_path: str = None) -> Dict[str, Any]:
-    """分析知识库"""
-    try:
-        # 验证输入路径
-        if not knowledge_base_path:
-            return {"status": "error", "message": "知识库路径不能为空"}
-
-        # 正确处理路径（移除可能的重复..）
-        clean_path = os.path.normpath(knowledge_base_path.replace("..", ""))
-
-        # 检查路径是否存在
-        if not os.path.exists(clean_path):
-            return {"status": "error", "message": f"知识库路径不存在: {clean_path}"}
-
-        # 创建分析器实例
-        analyzer = KnowledgeBaseAnalyzer()
-
-        # 先进行分析
-        print("开始分析知识库...")
-        stats = analyzer.analyze_knowledge_base(clean_path)
-
-        # 检查是否有错误
-        if "error" in stats:
-            error_msg = f"分析失败: {stats['error']}"
-            print(error_msg)
-            return {"status": "error", "message": error_msg}
-        else:
-            print("分析完成！")
-
-            # 获取统计报告
-            report = analyzer.get_statistics_report()
-            print(report)
-
-            # 确保返回完整的报告信息
-            return {
-                "status": "success",
-                "message": "知识库分析完成",
-                "data": report,
-                "stats": stats
-            }
-
-    except Exception as e:
-        # 捕获任何未预期的异常
-        error_msg = f"分析过程中发生未预期错误: {str(e)}"
-        print(error_msg)
-        return {"status": "error", "message": error_msg}
-
 
 @app.route('/ask_stream', methods=['POST'])
 def ask_question_stream():
@@ -187,6 +140,8 @@ def ask_question_stream():
                 from knowledge_base.qa_system import TimeSeriesQA
                 # 直接重用已存在的相似检索与提示构造逻辑：
                 similar_docs = qa_system.search_similar_documents(question)
+                report  = qa_system.analyze_knowledge_base(knowledge_base_path)
+                print("report:",report)
                 if similar_docs:
                     answer_messages = [
                         {"role": "system", "content": "你是一个社会调研专家。"},
