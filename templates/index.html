@@ -14,19 +14,15 @@
         </header>
 
         <main>
-            <!-- 替换模板上传区域的input -->
-<div class="template-upload-section">
-    <h4>上传回答模板文件</h4>
-    <form id="template-upload-form" enctype="multipart/form-data">
-        <div class="file-input-wrapper">
-            <input type="file" id="template-file-upload" accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx,.pdf" />
-            <span class="file-input-button">选择文件</span>
-        </div>
-        <span id="template-file-name" class="file-name-display"></span>
-        <button type="submit">上传模板</button>
-        <p class="template-info">上传后将替换当前回答模板，支持多种格式</p>
-    </form>
-</div>
+            <div class="template-upload-section">
+                    <h4>上传回答模板文件</h4>
+                    <form id="template-upload-form" enctype="multipart/form-data">
+                        <input type="file" id="template-file-upload"
+                               accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx,.pdf" />
+                        <button type="submit">上传模板</button>
+                        <p class="template-info">上传后将替换当前回答模板，支持多种格式</p>
+                    </form>
+            </div>
             <!-- 问答区域 -->
             <form id="question-form">
                 <div class="knowledge-base-selector">
@@ -60,13 +56,8 @@
                     </div>
                     <div id="folder-upload" class="upload-section hidden">
                         <h4>上传文件到当前目录</h4>
-                            <!-- 替换文件夹上传区域的input -->
                             <form id="folder-upload-form" enctype="multipart/form-data">
-                                <div class="file-input-wrapper">
-                                    <input type="file" id="folder-file-upload" accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx,.pdf" multiple/>
-                                    <span class="file-input-button">选择文件</span>
-                                </div>
-                                <span id="folder-file-name" class="file-name-display"></span>
+                                <input type="file" id="folder-file-upload" accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx,.pdf" multiple/>
                                 <button type="submit">上传</button>
                             </form>
 
@@ -668,29 +659,6 @@
             const lastItem = pathItems[pathItems.length - 1];
             return lastItem.getAttribute('data-path') || '';
         }
-        // 显示模板上传的文件名
-        document.getElementById('template-file-upload').addEventListener('change', function(e) {
-            const fileNameDisplay = document.getElementById('template-file-name');
-            if (this.files.length > 0) {
-                fileNameDisplay.textContent = this.files.length === 1
-                    ? this.files[0].name
-                    : `${this.files.length}个文件`;
-            } else {
-                fileNameDisplay.textContent = '';
-            }
-        });
-
-        // 显示文件夹上传的文件名
-        document.getElementById('folder-file-upload').addEventListener('change', function(e) {
-            const fileNameDisplay = document.getElementById('folder-file-name');
-            if (this.files.length > 0) {
-                fileNameDisplay.textContent = this.files.length === 1
-                    ? this.files[0].name
-                    : `${this.files.length}个文件`;
-            } else {
-                fileNameDisplay.textContent = '';
-            }
-        });
     </script>
 </body>
 </html>
