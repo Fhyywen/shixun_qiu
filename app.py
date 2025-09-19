@@ -111,9 +111,8 @@ def ask_question():
 
 @app.route('/ask_stream', methods=['POST'])
 def ask_question_stream():
-    """流式返回答案（SSE风格的数据帧，便于前端逐步渲染 Markdown）。"""
+    """流式返回答案（SSE）。参数解析后委托给 qa_system，保持路由简洁。"""
     try:
-        # 兼容 x-www-form-urlencoded 与 application/json
         if request.is_json:
             data = request.get_json()
             question = data.get('question', '')
@@ -130,104 +129,16 @@ def ask_question_stream():
         else:
             knowledge_base_path = convert_path_format(knowledge_base_path)
 
-        def generate_frames():
-            # 起始帧
-            yield f"data:{json.dumps({'type': 'start'})}\n\n"
-
-            # 优先尝试调用原生流
-            try:
-                # 准备提示词，与非流式路径保持一致
-                from knowledge_base.qa_system import TimeSeriesQA
-                # 直接重用已存在的相似检索与提示构造逻辑：
-                similar_docs = qa_system.search_similar_documents(question)
-                report  = qa_system.analyze_knowledge_base(knowledge_base_path)
-                print("report:",report)
-                if similar_docs:
-                    answer_messages = [
-                        {"role": "system", "content": "你是一个社会调研专家。"},
-                        {"role": "user", "content": qa_system.generate_answer_with_context.__doc__ or ""}
-                    ]
-                    # 这里重新构建与 generate_answer_with_context 一致的 prompt
-                    context_text = "\n\n".join([f"相关文档 {i + 1} (相似度: {doc['similarity']:.2f}):\n{doc['content']}" for i, doc in enumerate(similar_docs)])
-                    try:
-                        with open(Config().ANSWER_TEMPLATE, 'r', encoding='utf-8') as f:
-                            template = f.read()
-                    except Exception:
-                        template = "# 默认模板\n\n这是一个默认的回答模板。"
-                    prompt = f"""你是一个社会调研专家。基于以下相关知识，请回答用户的问题。
-
-相关背景知识：
-{context_text}
-套用模板：
-{template}
-用户问题：{question}
-数据参考：{report}
-使用模板结合背景知识来生成回答,要在回答里面放入具体数据，具体数据可以参考数据参考。"""
-                    messages = [
-                        {"role": "system", "content": "你是一个社会调研专家。"},
-                        {"role": "user", "content": prompt}
-                    ]
-                else:
-                    try:
-                        with open(Config().ANSWER_TEMPLATE, 'r', encoding='utf-8') as f:
-                            template = f.read()
-                    except Exception:
-                        template = "# 默认模板\n\n这是一个默认的回答模板。"
-                    prompt = f"""你是一个社会调研专家。请回答以下关于社会调研专家的问题。
-
-用户问题：{question}
-使用模板:{template}
-请基于你的专业知识提供准确、专业的回答。如果你是推测或不确定，请说明。"""
-                    messages = [
-                        {"role": "system", "content": "你是一个社会调研专家。"},
-                        {"role": "user", "content": prompt}
-                    ]
-
-                # 调用 LLM 原生流
-                for token in qa_system.llm_provider.stream_response(messages):
-                    if token:
-                        frame = {'type': 'chunk', 'content': token}
-                        yield f"data:{json.dumps(frame, ensure_ascii=False)}\n\n"
-
-                # 结束后回写来源与 meta（需要从非流式逻辑获取）
-                final_result = qa_system.ask_question(question, knowledge_base_path)
-                meta = {
-                    'type': 'end',
-                    'sources': final_result.get('sources', []),
-                    'knowledge_base_used': final_result.get('knowledge_base_used', ''),
-                    'confidence': final_result.get('confidence', 0)
-                }
-                yield f"data:{json.dumps(meta, ensure_ascii=False)}\n\n"
-                return
-            except Exception:
-                # 原生流失败时回退到模拟流
-                pass
-
-            # 回退：生成完整答案并按块切分模拟流
-            result = qa_system.ask_question(question, knowledge_base_path)
-            answer_text = result.get('answer', '')
-            chunk_size = 120
-            for i in range(0, len(answer_text), chunk_size):
-                chunk = answer_text[i:i + chunk_size]
-                frame = {'type': 'chunk', 'content': chunk}
-                yield f"data:{json.dumps(frame, ensure_ascii=False)}\n\n"
-
-            meta = {
-                'type': 'end',
-                'sources': result.get('sources', []),
-                'knowledge_base_used': result.get('knowledge_base_used', ''),
-                'confidence': result.get('confidence', 0)
-            }
-            yield f"data:{json.dumps(meta, ensure_ascii=False)}\n\n"
-
         headers = {
             'Content-Type': 'text/event-stream; charset=utf-8',
             'Cache-Control': 'no-cache, no-transform',
             'Connection': 'keep-alive',
-            # 尽量禁用代理/服务器缓冲
             'X-Accel-Buffering': 'no'
         }
-        return Response(stream_with_context(generate_frames()), headers=headers)
+        return Response(
+            stream_with_context(qa_system.stream_answer_sse(question, knowledge_base_path)),
+            headers=headers
+        )
     except Exception as e:
         return jsonify({'error': f'处理问题时出错: {str(e)}'})
 
