@@ -73,6 +73,50 @@ ask接口测试用例：
     "question": "帮我生产一份东城的社会调研报告，限制500字左右，简单一点",
     "knowledge_base_path": "/data/knowledge_base/test3"
 }
-spacy安装:
-conda install -c conda-forge spacy
-python -m spacy download zh_core_web_sm
+
+
+-- 创建数据库
+CREATE DATABASE IF NOT EXISTS knowledge_base_chat DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+USE knowledge_base_chat;
+
+-- 创建会话表
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    session_id VARCHAR(64) PRIMARY KEY,
+    user_id VARCHAR(64) DEFAULT 'anonymous',
+    knowledge_base_path VARCHAR(500),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    title VARCHAR(200) DEFAULT '新对话',
+    is_active BOOLEAN DEFAULT TRUE,
+    INDEX idx_user_id (user_id),
+    INDEX idx_created_at (created_at)
+);
+
+-- 创建对话消息表
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(64) NOT NULL,
+    role ENUM('system', 'user', 'assistant') NOT NULL,
+    content TEXT NOT NULL,
+    tokens INT DEFAULT 0,
+    metadata JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_session_id (session_id),
+    INDEX idx_created_at (created_at),
+    FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE
+);
+
+-- 创建知识库使用记录表
+CREATE TABLE IF NOT EXISTS knowledge_base_usage (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(64) NOT NULL,
+    knowledge_base_path VARCHAR(500) NOT NULL,
+    question TEXT NOT NULL,
+    similar_docs_count INT DEFAULT 0,
+    average_similarity FLOAT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_session_id (session_id),
+    INDEX idx_knowledge_base (knowledge_base_path(200)),
+    FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE
+);

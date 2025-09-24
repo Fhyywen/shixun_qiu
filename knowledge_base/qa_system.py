@@ -1,5 +1,6 @@
 import os
 import shutil
+from datetime import datetime
 
 import chromadb
 from typing import List, Dict, Any
@@ -7,6 +8,7 @@ from typing import List, Dict, Any
 from chromadb import Settings
 
 from knowledge_base.data_processing import DataProcessor
+from knowledge_base.database_manager import DatabaseManager
 from knowledge_base.knowledge_base_analyzer import KnowledgeBaseAnalyzer
 from knowledge_base.llm_providers import LLMProvider
 from config import Config
@@ -23,6 +25,17 @@ class TimeSeriesQA:
 
         self.processor = DataProcessor(model_name=self.config.EMBEDDING_MODEL)
         self.llm_provider = LLMProvider(self.config)
+
+        # 初始化数据库管理器
+        self.db_manager = DatabaseManager({
+            'host': self.config.MYSQL_HOST,
+            'port': self.config.MYSQL_PORT,
+            'user': self.config.MYSQL_USER,
+            'password': self.config.MYSQL_PASSWORD,
+            'database': self.config.MYSQL_DATABASE,
+            'charset': 'utf8mb4'
+        })
+
 
         # 确保目录存在
         self._ensure_directories_exist()
@@ -544,7 +557,6 @@ class TimeSeriesQA:
             # 准备上下文与提示词，尽量与非流式逻辑保持一致
             similar_docs = self.search_similar_documents(question)
             report = self.analyze_knowledge_base(knowledge_base_path)
-
             if similar_docs:
                 context_text = "\n\n".join([
                     f"相关文档 {i + 1} (相似度: {doc['similarity']:.2f}):\n{doc['content']}"
@@ -561,7 +573,7 @@ class TimeSeriesQA:
                     f"{template}\n"
                     f"用户问题：{question}\n"
                     f"数据参考：{report}\n"
-                    "使用模板结合背景知识来生成回答,要在回答里面放入具体数据，具体数据可以参考数据参考。"
+                    "使用模板结合背景知识来生成回答,要在回答里面放入具体数据，具体数据中的数据可以套用,一定要保证数据的真实性。"
                 )
             else:
                 try:
@@ -615,3 +627,229 @@ class TimeSeriesQA:
             "confidence": result.get("confidence", 0)
         }
         yield f"data:{json.dumps(meta, ensure_ascii=False)}\n\n"
+
+    def create_session(self, user_id: str = "anonymous", knowledge_base_path: str = None,
+                       title: str = "新对话") -> str:
+        """创建新的对话会话"""
+        return self.db_manager.create_session(user_id, knowledge_base_path, title)
+
+    def get_conversation_history(self, session_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """从数据库获取对话历史"""
+        return self.db_manager.get_conversation_history(session_id, limit)
+
+    def stream_answer_sse(self, question: str, knowledge_base_path: str = None,
+                          session_id: str = None) -> str:
+        """流式生成答案，支持多轮对话，使用数据库存储历史"""
+
+        # 获取对话历史
+        conversation_history = []
+        if session_id:
+            conversation_history = self.get_conversation_history(session_id)
+
+        # 起始帧
+        yield f"data:{json.dumps({'type': 'start', 'session_id': session_id})}\n\n"
+
+        # 构建当前对话上下文
+        similar_docs = self.search_similar_documents(question)
+        report = self.analyze_knowledge_base(knowledge_base_path)
+
+        # 准备系统提示词和上下文
+        try:
+            template = self._read_template_file()
+        except Exception:
+            template = "# 默认模板\n\n这是一个默认的回答模板。"
+
+        # 构建基础系统提示
+        system_prompt = """你是一个社会调研专家。请基于以下上下文进行对话："""
+
+        # 如果有相关文档，添加上下文
+        context_text = ""
+        if similar_docs:
+            context_text = "\n\n".join([
+                f"相关文档 {i + 1} (相似度: {doc['similarity']:.2f}):\n{doc['content']}"
+                for i, doc in enumerate(similar_docs)
+            ])
+            system_prompt += f"""
+
+相关背景知识：
+{context_text}
+
+套用模板：
+{template}
+
+数据参考：
+{report}
+
+请使用模板结合背景知识来生成回答，在回答中放入具体数据，保证数据的真实性。"""
+
+        # 构建完整的消息列表
+        messages = [{"role": "system", "content": system_prompt}]
+
+        # 添加对话历史（确保不超过token限制）
+        max_history_length = 6  # 限制历史对话轮数
+        recent_history = conversation_history[-max_history_length * 2:]
+
+        # 添加历史对话到消息中
+        for msg in recent_history:
+            messages.append(msg)
+
+        # 添加当前问题
+        messages.append({"role": "user", "content": question})
+
+        # 记录知识库使用情况
+        if session_id and similar_docs:
+            avg_similarity = sum(doc["similarity"] for doc in similar_docs) / len(similar_docs)
+            self.db_manager.record_knowledge_base_usage(
+                session_id,
+                knowledge_base_path or self.get_current_knowledge_base(),
+                question,
+                len(similar_docs),
+                avg_similarity
+            )
+
+        # 优先尝试原生流式响应
+        full_response = ""
+        try:
+            for token in self.llm_provider.stream_response(messages):
+                if token:
+                    full_response += token
+                    frame = {"type": "chunk", "content": token}
+                    yield f"data:{json.dumps(frame, ensure_ascii=False)}\n\n"
+
+            # 保存消息到数据库
+            if session_id:
+                # 保存用户问题
+                self.db_manager.add_message(
+                    session_id,
+                    "user",
+                    question,
+                    {"knowledge_base": knowledge_base_path, "timestamp": datetime.now().isoformat()}
+                )
+                # 保存助手回答
+                self.db_manager.add_message(
+                    session_id,
+                    "assistant",
+                    full_response,
+                    {"sources_count": len(similar_docs), "timestamp": datetime.now().isoformat()}
+                )
+
+                # 更新会话标题（如果这是第一轮对话）
+                if len(conversation_history) == 0:
+                    # 使用问题前20个字符作为标题
+                    title = question[:20] + "..." if len(question) > 20 else question
+                    self.db_manager.update_session_title(session_id, title)
+
+            # 末尾补充 meta 信息
+            meta = {
+                "type": "end",
+                "session_id": session_id,
+                "sources": [{"content": doc["content"][:200] + "...", "similarity": doc["similarity"]}
+                            for doc in similar_docs] if similar_docs else [],
+                "knowledge_base_used": knowledge_base_path or self.get_current_knowledge_base(),
+                "confidence": sum(doc["similarity"] for doc in similar_docs) / len(
+                    similar_docs) if similar_docs else 0.3,
+                "conversation_turn": len(conversation_history) // 2 + 1
+            }
+            yield f"data:{json.dumps(meta, ensure_ascii=False)}\n\n"
+
+        except Exception as e:
+            # 原生流失败时回退到模拟流
+            print(f"流式响应失败，回退到模拟流: {e}")
+
+            # 一次性生成完整答案
+            result = self.ask_question(question, knowledge_base_path)
+            answer_text = result.get("answer", "")
+            full_response = answer_text
+
+            # 模拟流式输出
+            chunk_size = 120
+            for i in range(0, len(answer_text), chunk_size):
+                chunk = answer_text[i:i + chunk_size]
+                frame = {"type": "chunk", "content": chunk}
+                yield f"data:{json.dumps(frame, ensure_ascii=False)}\n\n"
+
+            # 保存消息到数据库
+            if session_id:
+                self.db_manager.add_message(session_id, "user", question)
+                self.db_manager.add_message(session_id, "assistant", full_response)
+
+            meta = {
+                "type": "end",
+                "session_id": session_id,
+                "sources": result.get("sources", []),
+                "knowledge_base_used": result.get("knowledge_base_used", ""),
+                "confidence": result.get("confidence", 0),
+                "conversation_turn": len(conversation_history) // 2 + 1
+            }
+            yield f"data:{json.dumps(meta, ensure_ascii=False)}\n\n"
+
+    def get_user_sessions(self, user_id: str = "anonymous", limit: int = 50) -> List[Dict[str, Any]]:
+        """获取用户的会话列表"""
+        return self.db_manager.get_user_sessions(user_id, limit)
+
+    def close_session(self, session_id: str):
+        """关闭会话"""
+        self.db_manager.close_session(session_id)
+
+    def get_session_messages(self, session_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+        """获取指定会话的详细消息列表"""
+        conn = self.db_manager.get_connection()
+        try:
+            with conn.cursor(dictionary=True) as cursor:
+                sql = """
+                SELECT role, content, metadata, created_at
+                FROM chat_messages
+                WHERE session_id = %s
+                ORDER BY created_at ASC
+                LIMIT %s
+                """
+                cursor.execute(sql, (session_id, limit))
+                messages = cursor.fetchall()
+
+                # 格式化返回数据
+                formatted_messages = []
+                for msg in messages:
+                    formatted_msg = {
+                        "role": msg["role"],
+                        "content": msg["content"],
+                        "timestamp": msg["created_at"].isoformat() if msg["created_at"] else None
+                    }
+                    if msg["metadata"]:
+                        formatted_msg["metadata"] = json.loads(msg["metadata"])
+                    formatted_messages.append(formatted_msg)
+
+                return formatted_messages
+        except Exception as e:
+            print(f"获取会话消息失败: {e}")
+            return []
+        finally:
+            conn.close()
+
+    # 原有的其他方法保持不变...
+    def _ensure_directories_exist(self):
+        """确保必要的目录存在"""
+        os.makedirs(self.config.CHROMA_DB_PATH, exist_ok=True)
+        os.makedirs(self.config.KNOWLEDGE_BASE_PATH, exist_ok=True)
+
+    def _init_chroma_client(self):
+        """初始化 ChromaDB 客户端，处理设置冲突"""
+        try:
+            client = chromadb.PersistentClient(
+                path=self.config.CHROMA_DB_PATH,
+                settings=Settings(anonymized_telemetry=False)
+            )
+            return client
+        except ValueError as e:
+            if "different settings" in str(e):
+                print("检测到 ChromaDB 设置冲突，正在清理并重新创建...")
+                if os.path.exists(self.config.CHROMA_DB_PATH):
+                    shutil.rmtree(self.config.CHROMA_DB_PATH)
+                    os.makedirs(self.config.CHROMA_DB_PATH, exist_ok=True)
+
+                client = chromadb.PersistentClient(
+                    path=self.config.CHROMA_DB_PATH,
+                    settings=Settings(anonymized_telemetry=False)
+                )
+                return client
+            else:
+                raise e

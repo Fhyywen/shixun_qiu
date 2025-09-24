@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, Any
 
 from flask import Flask, render_template, request, jsonify, abort
@@ -111,36 +112,167 @@ def ask_question():
 
 @app.route('/ask_stream', methods=['POST'])
 def ask_question_stream():
-    """流式返回答案（SSE）。参数解析后委托给 qa_system，保持路由简洁。"""
+    """流式返回答案（SSE），支持多轮对话和会话管理"""
     try:
         if request.is_json:
             data = request.get_json()
             question = data.get('question', '')
             knowledge_base_path = data.get('knowledge_base_path', '')
+            session_id = data.get('session_id', '')  # 新增：会话ID
+            user_id = data.get('user_id', 'anonymous')  # 新增：用户ID
+            new_session = data.get('new_session', False)  # 新增：是否创建新会话
         else:
             question = request.form.get('question', '')
             knowledge_base_path = request.form.get('knowledge_base_path', '')
+            session_id = request.form.get('session_id', '')  # 新增：会话ID
+            user_id = request.form.get('user_id', 'anonymous')  # 新增：用户ID
+            new_session = request.form.get('new_session', False, type=bool)  # 新增：是否创建新会话
 
         if not question:
-            return jsonify({'error': '请输入问题'})
+            return jsonify({'error': '请输入问题'}), 400
 
+        # 处理知识库路径
         if not knowledge_base_path:
             knowledge_base_path = Config().DATA_PATH
         else:
             knowledge_base_path = convert_path_format(knowledge_base_path)
 
+        # 会话管理逻辑
+        if new_session or not session_id:
+            # 创建新会话
+            session_id = qa_system.create_session(user_id=user_id, knowledge_base_path=knowledge_base_path)
+            print(f"创建新会话: {session_id}")
+        else:
+            # 验证现有会话
+            try:
+                history = qa_system.get_conversation_history(session_id)
+                print(f"使用现有会话: {session_id}, 历史消息数: {len(history)}")
+            except Exception as e:
+                print(f"会话验证失败, 创建新会话: {e}")
+                session_id = qa_system.create_session(user_id=user_id, knowledge_base_path=knowledge_base_path)
+
         headers = {
             'Content-Type': 'text/event-stream; charset=utf-8',
             'Cache-Control': 'no-cache, no-transform',
             'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no'
+            'X-Accel-Buffering': 'no',
+            'Access-Control-Allow-Origin': '*',  # 根据实际情况调整CORS
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type'
         }
+
+        # 流式响应
         return Response(
-            stream_with_context(qa_system.stream_answer_sse(question, knowledge_base_path)),
-            headers=headers
+            stream_with_context(qa_system.stream_answer_sse(
+                question=question,
+                knowledge_base_path=knowledge_base_path,
+                session_id=session_id
+            )),
+            headers=headers,
+            mimetype='text/event-stream'
         )
+
     except Exception as e:
-        return jsonify({'error': f'处理问题时出错: {str(e)}'})
+        logging.error(f"流式问答接口错误: {str(e)}")
+        return jsonify({'error': f'处理问题时出错: {str(e)}'}), 500
+
+
+@app.route('/sessions', methods=['GET', 'POST', 'DELETE'])
+def manage_sessions():
+    """会话管理接口"""
+    try:
+        user_id = request.args.get('user_id', 'anonymous') or request.json.get('user_id', 'anonymous')
+
+        if request.method == 'GET':
+            # 获取用户会话列表
+            sessions = qa_system.get_user_sessions(user_id=user_id)
+            return jsonify({
+                'success': True,
+                'sessions': sessions,
+                'count': len(sessions)
+            })
+
+        elif request.method == 'POST':
+            # 创建新会话
+            data = request.get_json() or {}
+            knowledge_base_path = data.get('knowledge_base_path', '')
+            title = data.get('title', '新对话')
+
+            if knowledge_base_path:
+                knowledge_base_path = convert_path_format(knowledge_base_path)
+
+            session_id = qa_system.create_session(
+                user_id=user_id,
+                knowledge_base_path=knowledge_base_path,
+                title=title
+            )
+
+            return jsonify({
+                'success': True,
+                'session_id': session_id,
+                'message': '会话创建成功'
+            })
+
+        elif request.method == 'DELETE':
+            # 关闭会话
+            data = request.get_json() or {}
+            session_id = data.get('session_id')
+
+            if not session_id:
+                return jsonify({'error': '缺少session_id参数'}), 400
+
+            qa_system.close_session(session_id)
+            return jsonify({
+                'success': True,
+                'message': '会话已关闭'
+            })
+
+    except Exception as e:
+        logging.error(f"会话管理错误: {str(e)}")
+        return jsonify({'error': f'会话管理失败: {str(e)}'}), 500
+
+
+@app.route('/sessions/<session_id>/messages', methods=['GET'])
+def get_session_messages(session_id):
+    """获取指定会话的消息历史"""
+    try:
+        limit = request.args.get('limit', 100, type=int)
+        messages = qa_system.get_session_messages(session_id, limit)
+
+        return jsonify({
+            'success': True,
+            'session_id': session_id,
+            'messages': messages,
+            'count': len(messages)
+        })
+    except Exception as e:
+        logging.error(f"获取会话消息错误: {str(e)}")
+        return jsonify({'error': f'获取消息失败: {str(e)}'}), 500
+
+
+@app.route('/sessions/<session_id>/title', methods=['PUT'])
+def update_session_title(session_id):
+    """更新会话标题"""
+    try:
+        data = request.get_json() or {}
+        new_title = data.get('title', '').strip()
+
+        if not new_title:
+            return jsonify({'error': '标题不能为空'}), 400
+
+        qa_system.db_manager.update_session_title(session_id, new_title)
+
+        return jsonify({
+            'success': True,
+            'message': '标题更新成功',
+            'session_id': session_id,
+            'new_title': new_title
+        })
+    except Exception as e:
+        logging.error(f"更新会话标题错误: {str(e)}")
+        return jsonify({'error': f'更新标题失败: {str(e)}'}), 500
+
+
 
 def convert_path_format(path):
     """
