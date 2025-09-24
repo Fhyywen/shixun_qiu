@@ -47,6 +47,13 @@
             <div id="answer-container">
                 <div id="answer"></div>
                 <div id="references"></div>
+                <!-- 新增下载按钮区域 -->
+                <!-- 在原下载按钮区域替换为以下代码 -->
+                <div class="download-section" style="margin-top: 20px; text-align: right;">
+                    <button id="download-html" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; display: none;">
+                        下载HTML格式回答
+                    </button>
+                </div>
             </div>
 
 
@@ -101,6 +108,9 @@
 
             // 绑定浏览知识库路径按钮事件
             document.getElementById('browse-kb').addEventListener('click', showKnowledgeBaseBrowser);
+
+            // 绑定下载按钮点击事件
+            document.getElementById('download-html').addEventListener('click', downloadAsHtml);
         });
 
         // 修复当前路径按钮功能
@@ -122,6 +132,9 @@
             }
         }
 
+        // 保存完整的回答内容（在流式处理中更新）
+        let fullAnswerContent = '';
+        let fullReferencesContent = '';
         // 问答功能（流式 + Markdown 渲染）
         // 修改JS中的显示逻辑
         document.getElementById('question-form').addEventListener('submit', async function(e) {
@@ -144,6 +157,12 @@
             document.getElementById('answer-container').classList.remove('hidden');
 
             try {
+                // 重置完整内容变量
+                fullAnswerContent = '';
+                fullReferencesContent = '';
+                // 隐藏下载按钮
+                document.getElementById('download-html').style.display = 'none';
+
                 // 以SSE方式读取流式响应（保持不变）
                 const params = new URLSearchParams();
                 params.append('question', question);
@@ -195,6 +214,8 @@
                                 kbInfo.className = 'knowledge-base-used';
                                 kbInfo.textContent = `使用的知识库: ${kb}`;
                                 document.getElementById('answer').appendChild(kbInfo);
+                                // 添加到完整内容
+                                fullAnswerContent += kbInfo.outerHTML;
                             }
 
                             const sources = frame.sources || [];
@@ -211,7 +232,11 @@
                                     ul.appendChild(li);
                                 });
                                 document.getElementById('references').appendChild(ul);
+                                // 保存完整参考来源内容
+                                fullReferencesContent = title.outerHTML + ul.outerHTML;
                             }
+                            // 关键：回答生成完成后显示下载按钮
+                            document.getElementById('download-html').style.display = 'inline-block';
                         }
                     }
                 }
@@ -223,6 +248,57 @@
                 questionInput.value = '';
             }
         });
+
+        // 添加下载HTML功能
+        // 修改下载功能的JavaScript代码
+function downloadAsHtml() {
+    // 获取当前生成的回答内容和参考来源
+    const answerContent = document.getElementById('answer').innerHTML;
+    const referencesContent = document.getElementById('references').innerHTML;
+
+    // 创建仅包含生成内容的HTML结构
+    const htmlContent = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>时间序列预测算法知识库回答</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .knowledge-base-used { color: #666; font-style: italic; margin-top: 15px; }
+        h3 { margin-top: 25px; color: #333; }
+        ul { margin-left: 20px; padding-left: 0; }
+        li { margin: 5px 0; }
+        /* 增加Markdown常见元素的样式 */
+        p { margin: 10px 0; }
+        pre { background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; }
+        code { background: #f0f0f0; padding: 2px 4px; border-radius: 2px; }
+        blockquote { border-left: 4px solid #ddd; padding-left: 15px; margin-left: 0; color: #666; }
+    </style>
+</head>
+<body>
+    <div id="answer">${answerContent}</div>
+    <div id="references">${referencesContent}</div>
+</body>
+</html>`;
+
+    // 创建Blob对象并生成下载链接
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    // 生成带时间戳的文件名
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    a.download = `answer-${timestamp}.html`;
+    document.body.appendChild(a);
+    a.click();
+
+    // 清理资源
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, 0);
+}
 
         // 文件管理相关JS代码
         // 文件夹内上传文件表单提交
