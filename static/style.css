@@ -1,495 +1,800 @@
 * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-            line-height: 1.6;
-            color: #2d3748;
-            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
-            min-height: 100vh;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        /* 头部样式 */
-        header {
-            text-align: center;
-            margin-bottom: 40px;
-            padding: 30px 20px;
-            background: linear-gradient(120deg, #4c6ef5 0%, #3b5bdb 100%);
-            border-radius: 12px;
-            color: white;
-            box-shadow: 0 10px 25px rgba(59, 91, 219, 0.2);
-        }
-
-        header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 12px;
-            font-weight: 700;
-        }
-
-        header p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-            max-width: 700px;
-            margin: 0 auto;
-        }
-
-        /* 主内容区域 */
-        main {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 30px;
-        }
-
-        @media (min-width: 992px) {
-            main {
-                grid-template-areas:
-                    "template kb-selector"
-                    "loading loading" /* 加载区域在上 */
-                    "answer answer"   /* 回答区域在下 */
-                    "file-manager file-manager";
-            }
-
-            #loading-container {
-                grid-area: loading;
-            }
-
-            .template-upload-section {
-                grid-area: template;
-            }
-
-            #question-form {
-                grid-area: kb-selector;
-            }
-
-            #answer-container {
-                grid-area: answer; /* 让回答区域横跨两列 */
-            }
-
-            .file-manager {
-                grid-area: file-manager;
-            }
-        }
-
-        /* 卡片样式 */
-        .card {
-            background: white;
-            border-radius: 12px;
-            padding: 25px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-        }
-
-        .card h3 {
-            color: #4c6ef5;
-            margin-bottom: 20px;
-            font-size: 1.4rem;
-            border-bottom: 2px solid #e9ecef;
-            padding-bottom: 10px;
-        }
-
-        /* 问答区域样式 */
-        .input-group {
-            display: flex;
-            margin-bottom: 20px;
-            position: relative;
-        }
-
-        #question-input {
-            flex: 1;
-            padding: 16px 20px;
-            border: 2px solid #e9ecef;
-            border-radius: 10px 0 0 10px;
-            font-size: 16px;
-            transition: border-color 0.3s;
-        }
-
-        #question-input:focus {
-            outline: none;
-            border-color: #4c6ef5;
-        }
-
-        #question-form button {
-            padding: 16px 25px;
-            background: linear-gradient(120deg, #4c6ef5 0%, #3b5bdb 100%);
-            color: white;
-            border: none;
-            border-radius: 0 10px 10px 0;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-
-        #question-form button:hover {
-            background: linear-gradient(120deg, #3b5bdb 0%, #2f4dbe 100%);
-        }
-
-        /* 知识库选择器样式 */
-        .knowledge-base-selector {
-            margin-bottom: 25px;
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-        }
-
-        .knowledge-base-selector label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #495057;
-        }
-
-        #knowledge-base-path {
-            width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            font-size: 15px;
-            margin-bottom: 12px;
-        }
-
-        .kb-buttons {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .kb-buttons button {
-            padding: 10px 15px;
-            background: #fff;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.3s;
-        }
-
-        .kb-buttons button:hover {
-            background: #4c6ef5;
-            color: white;
-            border-color: #4c6ef5;
-        }
-
-        /* 答案区域样式 */
-        #answer-container {
-            background: white;
-            border-radius: 12px;
-            padding: 25px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-            margin-bottom: 20px;
-            min-height: 300px; /* 增加最小高度 */
-        }
-
-        #answer {
-            margin-bottom: 25px;
-            line-height: 1.8;
-        }
-
-        #references {
-            border-top: 1px solid #e9ecef;
-            padding-top: 20px;
-        }
-
-        #references h3 {
-            color: #495057;
-            margin-bottom: 15px;
-            font-size: 1.1rem;
-        }
-
-        #references ul {
-            padding-left: 20px;
-        }
-
-        #references li {
-            margin-bottom: 8px;
-            color: #6c757d;
-            padding: 5px 0;
-        }
-
-        /* 加载动画 */
-        #loading {
-            text-align: center;
-            padding: 25px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-        }
-
-        #loading p {
-            display: inline-block;
-            color: #4c6ef5;
-            font-weight: 500;
-        }
-
-        /* 文件管理器样式 */
-        .file-manager {
-            background: white;
-            border-radius: 12px;
-            padding: 25px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-        }
-
-        .files-section {
-            margin-bottom: 25px;
-        }
-
-        #structure-path {
-            margin-bottom: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        .path-item {
-            color: #4c6ef5;
-            cursor: pointer;
-            padding: 5px 10px;
-            border-radius: 5px;
-            transition: background 0.3s;
-        }
-
-        .path-item:hover {
-            background: rgba(76, 110, 245, 0.1);
-        }
-
-        .upload-section {
-            margin-bottom: 25px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 10px;
-        }
-
-        .upload-section h4 {
-            margin-bottom: 15px;
-            color: #495057;
-        }
-
-        /* 文件上传样式 */
-        .file-input-wrapper {
-            position: relative;
-            margin-bottom: 15px;
-        }
-
-        .file-input-wrapper input[type="file"] {
-            position: absolute;
-            left: 0;
-            top: 0;
-            opacity: 0;
-            width: 100%;
-            height: 100%;
-            cursor: pointer;
-        }
-
-        .file-input-button {
-            display: inline-block;
-            padding: 12px 20px;
-            background: #4c6ef5;
-            color: white;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-
-        .file-input-button:hover {
-            background: #3b5bdb;
-        }
-
-        .file-name-display {
-            display: block;
-            margin: 10px 0;
-            color: #6c757d;
-            font-style: italic;
-        }
-
-        /* 按钮样式 */
-        button {
-            padding: 12px 20px;
-            background: #4c6ef5;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 15px;
-            transition: all 0.3s;
-        }
-
-        button:hover {
-            background: #3b5bdb;
-            transform: translateY(-2px);
-        }
-
-        /* 文件项样式 */
-        .file-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 15px;
-            border-bottom: 1px solid #e9ecef;
-            transition: background 0.3s;
-        }
-
-        .file-item:hover {
-            background: #f8f9fa;
-        }
-
-        .folder-item, .file-name {
-            cursor: pointer;
-            padding: 5px 0;
-        }
-
-        .folder-item:hover, .file-name:hover {
-            color: #4c6ef5;
-        }
-
-        .file-actions {
-            display: flex;
-            gap: 8px;
-        }
-
-        .file-actions button {
-            padding: 6px 12px;
-            font-size: 13px;
-        }
-
-        .build-btn {
-            background: #20c997;
-        }
-
-        .build-btn:hover {
-            background: #19a97c;
-        }
-
-        .delete-btn {
-            background: #fa5252;
-        }
-
-        .delete-btn:hover {
-            background: #e03131;
-        }
-
-        /* 新建文件夹区域 */
-        .new-folder-section {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px dashed #dee2e6;
-        }
-
-        #new-folder-name {
-            padding: 12px 15px;
-            margin-right: 10px;
-            width: 250px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            font-size: 15px;
-        }
-
-        /* 隐藏类 */
-        .hidden {
-            display: none;
-        }
-
-        /* 错误提示 */
-        .error {
-            color: #fa5252;
-            padding: 10px;
-            background: #fff5f5;
-            border-radius: 6px;
-            border-left: 4px solid #fa5252;
-        }
-
-        /* 模态框样式 */
-        .kb-browser-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-
-        .kb-browser-content {
-            background-color: white;
-            padding: 25px;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 600px;
-            max-height: 80vh;
-            overflow-y: auto;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-        }
-
-        .kb-browser-folder {
-            padding: 12px 15px;
-            margin: 8px 0;
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-
-        .kb-browser-folder:hover {
-            background-color: #e9ecef;
-        }
-
-        .modal-buttons {
-            margin-top: 25px;
-            display: flex;
-            justify-content: flex-end;
-            gap: 12px;
-        }
-
-        .modal-buttons button {
-            padding: 10px 20px;
-        }
-
-        #close-kb-browser {
-            background: #868e96;
-        }
-
-        #close-kb-browser:hover {
-            background: #6c757d;
-        }
-
-        /* 模板上传区域 */
-        .template-upload-section {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 25px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-        }
-
-        .template-upload-section h4 {
-            color: #495057;
-            margin-bottom: 15px;
-        }
-
-        .template-info {
-            margin-top: 10px;
-            color: #6c757d;
-            font-size: 0.9rem;
-        }
-        #loading-container {
-            margin-bottom: 20px; /* 与回答区域保持距离 */
-        }
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    line-height: 1.6;
+    color: #2d3748;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* 头部样式 */
+header {
+    text-align: center;
+    margin-bottom: 40px;
+    padding: 30px 20px;
+    background: linear-gradient(120deg, #4c6ef5 0%, #3b5bdb 100%);
+    border-radius: 12px;
+    color: white;
+    box-shadow: 0 10px 25px rgba(59, 91, 219, 0.2);
+}
+
+header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+    font-weight: 700;
+}
+
+header p {
+    font-size: 1.2rem;
+    opacity: 0.9;
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+/* 主内容区域 */
+main {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 30px;
+}
+
+@media (min-width: 992px) {
+    main {
+        grid-template-areas:
+            "session-management session-management"
+            "template kb-selector"
+            "conversation conversation"
+            "loading loading"
+            "answer answer"
+            "file-manager file-manager";
+    }
+
+    .session-management {
+        grid-area: session-management;
+    }
+
+    #conversation-history {
+        grid-area: conversation;
+    }
+
+    #loading-container {
+        grid-area: loading;
+    }
+
+    .template-upload-section {
+        grid-area: template;
+    }
+
+    #question-form {
+        grid-area: kb-selector;
+    }
+
+    #answer-container {
+        grid-area: answer;
+    }
+
+    .file-manager {
+        grid-area: file-manager;
+    }
+}
+
+/* 会话管理区域 */
+.session-management {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    margin-bottom: 20px;
+}
+
+.session-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.session-controls button {
+    padding: 10px 15px;
+    background: #4c6ef5;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s;
+}
+
+.session-controls button:hover {
+    background: #3b5bdb;
+    transform: translateY(-2px);
+}
+
+#current-session-info {
+    margin-left: auto;
+    color: #495057;
+    font-weight: 500;
+    background: #f8f9fa;
+    padding: 8px 12px;
+    border-radius: 6px;
+}
+
+/* 会话列表模态框 */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: white;
+    padding: 25px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.modal h3 {
+    color: #4c6ef5;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e9ecef;
+    padding-bottom: 10px;
+}
+
+/* 会话列表项 */
+.session-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    border-bottom: 1px solid #e9ecef;
+    transition: background 0.3s;
+}
+
+.session-item:hover {
+    background: #f8f9fa;
+}
+
+.session-item.active {
+    background: #e7f1ff;
+    border-left: 4px solid #4c6ef5;
+}
+
+.session-info {
+    flex: 1;
+}
+
+.session-info strong {
+    display: block;
+    margin-bottom: 5px;
+    color: #2d3748;
+}
+
+.session-date, .session-kb {
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-right: 10px;
+}
+
+.session-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.session-actions button {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.session-actions .switch-session-btn {
+    background: #4c6ef5;
+    color: white;
+}
+
+.session-actions .view-history-btn {
+    background: #20c997;
+    color: white;
+}
+
+.session-actions .delete-session-btn {
+    background: #fa5252;
+    color: white;
+}
+
+/* 对话历史区域 */
+#conversation-history {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    margin-bottom: 20px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+#conversation-history h3 {
+    color: #4c6ef5;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e9ecef;
+    padding-bottom: 10px;
+}
+
+#history-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.message {
+    padding: 15px;
+    border-radius: 12px;
+    max-width: 80%;
+    word-wrap: break-word;
+    position: relative;
+}
+
+.message.user {
+    background: #e7f1ff;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+}
+
+.message.assistant {
+    background: #f8f9fa;
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+}
+
+.message.user::before {
+    content: '问';
+    position: absolute;
+    left: -25px;
+    top: 15px;
+    background: #4c6ef5;
+    color: white;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.message.assistant::before {
+    content: '答';
+    position: absolute;
+    right: -25px;
+    top: 15px;
+    background: #20c997;
+    color: white;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 卡片样式 */
+.card {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+}
+
+.card h3 {
+    color: #4c6ef5;
+    margin-bottom: 20px;
+    font-size: 1.4rem;
+    border-bottom: 2px solid #e9ecef;
+    padding-bottom: 10px;
+}
+
+/* 问答区域样式 */
+.input-group {
+    display: flex;
+    margin-bottom: 20px;
+    position: relative;
+}
+
+#question-input {
+    flex: 1;
+    padding: 16px 20px;
+    border: 2px solid #e9ecef;
+    border-radius: 10px 0 0 10px;
+    font-size: 16px;
+    transition: border-color 0.3s;
+}
+
+#question-input:focus {
+    outline: none;
+    border-color: #4c6ef5;
+}
+
+#question-form button {
+    padding: 16px 25px;
+    background: linear-gradient(120deg, #4c6ef5 0%, #3b5bdb 100%);
+    color: white;
+    border: none;
+    border-radius: 0 10px 10px 0;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
+    transition: all 0.3s;
+}
+
+#question-form button:hover {
+    background: linear-gradient(120deg, #3b5bdb 0%, #2f4dbe 100%);
+}
+
+/* 知识库选择器样式 */
+.knowledge-base-selector {
+    margin-bottom: 25px;
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+}
+
+.knowledge-base-selector label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #495057;
+}
+
+#knowledge-base-path {
+    width: 100%;
+    padding: 12px 15px;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    font-size: 15px;
+    margin-bottom: 12px;
+}
+
+.kb-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.kb-buttons button {
+    padding: 10px 15px;
+    background: #fff;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s;
+}
+
+.kb-buttons button:hover {
+    background: #4c6ef5;
+    color: white;
+    border-color: #4c6ef5;
+}
+
+/* 答案区域样式 */
+#answer-container {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    margin-bottom: 20px;
+    min-height: 300px;
+}
+
+#answer {
+    margin-bottom: 25px;
+    line-height: 1.8;
+}
+
+#answer p {
+    margin-bottom: 15px;
+}
+
+#answer pre {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 15px 0;
+}
+
+#answer code {
+    background: #f1f3f5;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+}
+
+#answer blockquote {
+    border-left: 4px solid #4c6ef5;
+    padding-left: 15px;
+    margin: 15px 0;
+    color: #6c757d;
+    font-style: italic;
+}
+
+#references {
+    border-top: 1px solid #e9ecef;
+    padding-top: 20px;
+}
+
+#references h3 {
+    color: #495057;
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+}
+
+#references ul {
+    padding-left: 20px;
+}
+
+#references li {
+    margin-bottom: 8px;
+    color: #6c757d;
+    padding: 5px 0;
+}
+
+/* 加载动画 */
+#loading {
+    text-align: center;
+    padding: 25px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+#loading p {
+    display: inline-block;
+    color: #4c6ef5;
+    font-weight: 500;
+}
+
+/* 文件管理器样式 */
+.file-manager {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.files-section {
+    margin-bottom: 25px;
+}
+
+#structure-path {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.path-item {
+    color: #4c6ef5;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 5px;
+    transition: background 0.3s;
+}
+
+.path-item:hover {
+    background: rgba(76, 110, 245, 0.1);
+}
+
+.upload-section {
+    margin-bottom: 25px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+}
+
+.upload-section h4 {
+    margin-bottom: 15px;
+    color: #495057;
+}
+
+/* 文件上传样式 */
+.file-input-wrapper {
+    position: relative;
+    margin-bottom: 15px;
+}
+
+.file-input-wrapper input[type="file"] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+}
+
+.file-input-button {
+    display: inline-block;
+    padding: 12px 20px;
+    background: #4c6ef5;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.file-input-button:hover {
+    background: #3b5bdb;
+}
+
+.file-name-display {
+    display: block;
+    margin: 10px 0;
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* 按钮样式 */
+button {
+    padding: 12px 20px;
+    background: #4c6ef5;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 15px;
+    transition: all 0.3s;
+}
+
+button:hover {
+    background: #3b5bdb;
+    transform: translateY(-2px);
+}
+
+/* 文件项样式 */
+.file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    border-bottom: 1px solid #e9ecef;
+    transition: background 0.3s;
+}
+
+.file-item:hover {
+    background: #f8f9fa;
+}
+
+.folder-item, .file-name {
+    cursor: pointer;
+    padding: 5px 0;
+}
+
+.folder-item:hover, .file-name:hover {
+    color: #4c6ef5;
+}
+
+.file-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.file-actions button {
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+.build-btn {
+    background: #20c997;
+}
+
+.build-btn:hover {
+    background: #19a97c;
+}
+
+.delete-btn {
+    background: #fa5252;
+}
+
+.delete-btn:hover {
+    background: #e03131;
+}
+
+/* 新建文件夹区域 */
+.new-folder-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px dashed #dee2e6;
+}
+
+#new-folder-name {
+    padding: 12px 15px;
+    margin-right: 10px;
+    width: 250px;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    font-size: 15px;
+}
+
+/* 隐藏类 */
+.hidden {
+    display: none !important;
+}
+
+/* 错误提示 */
+.error {
+    color: #fa5252;
+    padding: 10px;
+    background: #fff5f5;
+    border-radius: 6px;
+    border-left: 4px solid #fa5252;
+}
+
+/* 模态框样式 */
+.kb-browser-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.kb-browser-content {
+    background-color: white;
+    padding: 25px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.kb-browser-folder {
+    padding: 12px 15px;
+    margin: 8px 0;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.kb-browser-folder:hover {
+    background-color: #e9ecef;
+}
+
+.modal-buttons {
+    margin-top: 25px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.modal-buttons button {
+    padding: 10px 20px;
+}
+
+#close-kb-browser {
+    background: #868e96;
+}
+
+#close-kb-browser:hover {
+    background: #6c757d;
+}
+
+/* 模板上传区域 */
+.template-upload-section {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.template-upload-section h4 {
+    color: #495057;
+    margin-bottom: 15px;
+}
+
+.template-info {
+    margin-top: 10px;
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+#loading-container {
+    margin-bottom: 20px;
+}
+
+/* 下载按钮样式 */
+.download-section {
+    margin-top: 20px;
+    text-align: right;
+}
+
+#download-html {
+    padding: 8px 16px;
+    background: #20c997;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+#download-html:hover {
+    background: #19a97c;
+}
+
+/* Markdown内容样式增强 */
+.knowledge-base-used {
+    color: #666;
+    font-style: italic;
+    margin-top: 15px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 4px solid #4c6ef5;
+}
+
+/* 滚动条样式 */
+#conversation-history::-webkit-scrollbar,
+.modal-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+#conversation-history::-webkit-scrollbar-track,
+.modal-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+#conversation-history::-webkit-scrollbar-thumb,
+.modal-content::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+#conversation-history::-webkit-scrollbar-thumb:hover,
+.modal-content::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}

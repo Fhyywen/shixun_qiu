@@ -14,15 +14,36 @@
         </header>
 
         <main>
-            <div class="template-upload-section">
-                    <h4>上传回答模板文件</h4>
-                    <form id="template-upload-form" enctype="multipart/form-data">
-                        <input type="file" id="template-file-upload"
-                               accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx,.pdf" />
-                        <button type="submit">上传模板</button>
-                        <p class="template-info">上传后将替换当前回答模板，支持多种格式</p>
-                    </form>
+            <!-- 会话管理区域 -->
+            <div class="session-management">
+                <div class="session-controls">
+                    <button id="new-session-btn">新建会话</button>
+                    <button id="show-sessions-btn">会话列表</button>
+                    <span id="current-session-info">当前会话: 无</span>
+                </div>
+
+                <!-- 会话列表模态框 -->
+                <div id="sessions-modal" class="modal hidden">
+                    <div class="modal-content">
+                        <h3>会话列表</h3>
+                        <div id="sessions-list"></div>
+                        <div class="modal-buttons">
+                            <button id="close-sessions-modal">关闭</button>
+                        </div>
+                    </div>
+                </div>
             </div>
+
+            <div class="template-upload-section">
+                <h4>上传回答模板文件</h4>
+                <form id="template-upload-form" enctype="multipart/form-data">
+                    <input type="file" id="template-file-upload"
+                           accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx,.pdf" />
+                    <button type="submit">上传模板</button>
+                    <p class="template-info">上传后将替换当前回答模板，支持多种格式</p>
+                </form>
+            </div>
+
             <!-- 问答区域 -->
             <form id="question-form">
                 <div class="knowledge-base-selector">
@@ -30,7 +51,7 @@
                     <input type="text" id="knowledge-base-path" placeholder="例如: /data/knowledge_base" autocomplete="off">
                     <button type="button" id="use-default-kb">清空路径</button>
                     <button type="button" id="get-current-kb">默认路径</button>
-                    <button type="button" id="browse-kb">浏览...</button> <!-- 新增按钮 -->
+                    <button type="button" id="browse-kb">浏览...</button>
                 </div>
                 <div class="input-group">
                     <input type="text" id="question-input" placeholder="请输入关于时间序列预测算法的问题..." autocomplete="off">
@@ -44,19 +65,21 @@
                 </div>
             </div>
 
+            <!-- 对话历史显示区域 -->
+            <div id="conversation-history" class="hidden">
+                <h3>对话历史</h3>
+                <div id="history-messages"></div>
+            </div>
+
             <div id="answer-container">
                 <div id="answer"></div>
                 <div id="references"></div>
-                <!-- 新增下载按钮区域 -->
-                <!-- 在原下载按钮区域替换为以下代码 -->
                 <div class="download-section" style="margin-top: 20px; text-align: right;">
                     <button id="download-html" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; display: none;">
                         下载HTML格式回答
                     </button>
                 </div>
             </div>
-
-
 
             <!-- 文件管理区域 -->
             <div class="file-manager">
@@ -67,187 +90,424 @@
                     </div>
                     <div id="folder-upload" class="upload-section hidden">
                         <h4>上传文件到当前目录</h4>
-                            <form id="folder-upload-form" enctype="multipart/form-data">
-                                <input type="file" id="folder-file-upload" accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx,.pdf" multiple/>
-                                <button type="submit">上传</button>
-                            </form>
+                        <form id="folder-upload-form" enctype="multipart/form-data">
+                            <input type="file" id="folder-file-upload" accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx,.pdf" multiple/>
+                            <button type="submit">上传</button>
+                        </form>
 
-                            <div class="new-folder-section">
-                                <h4>新建文件夹</h4>
-                                <input type="text" id="new-folder-name" placeholder="请输入文件夹名称">
-                                <button id="create-folder-btn">创建</button>
-                            </div>
+                        <div class="new-folder-section">
+                            <h4>新建文件夹</h4>
+                            <input type="text" id="new-folder-name" placeholder="请输入文件夹名称">
+                            <button id="create-folder-btn">创建</button>
+                        </div>
                     </div>
 
                     <div id="structure-list">
                         <!-- 目录结构将通过JS动态加载 -->
                     </div>
                 </div>
-
-
             </div>
         </main>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
-        // 页面加载时获取当前知识库路径
+        // 全局变量
+        let currentSessionId = '';
+        let currentUserId = 'user_' + Math.random().toString(36).substr(2, 9); // 生成随机用户ID
+        let fullAnswerContent = '';
+        let fullReferencesContent = '';
+
+        // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', () => {
-            // 加载目录结构
+            initializeApp();
+            bindEvents();
+        });
+
+        // 初始化应用
+        function initializeApp() {
             loadStructure();
-
-            // 获取当前知识库路径并显示
             getCurrentKnowledgeBase();
+            // 自动创建新会话
+            createNewSession();
+        }
 
-            // 绑定知识库路径相关按钮事件
+        // 绑定事件
+        function bindEvents() {
+            // 会话管理事件
+            document.getElementById('new-session-btn').addEventListener('click', createNewSession);
+            document.getElementById('show-sessions-btn').addEventListener('click', showSessionsModal);
+            document.getElementById('close-sessions-modal').addEventListener('click', closeSessionsModal);
+
+            // 知识库路径事件
             document.getElementById('use-default-kb').addEventListener('click', () => {
                 document.getElementById('knowledge-base-path').value = '';
             });
-
             document.getElementById('get-current-kb').addEventListener('click', getCurrentKnowledgeBase);
-
-            // 绑定浏览知识库路径按钮事件
             document.getElementById('browse-kb').addEventListener('click', showKnowledgeBaseBrowser);
 
-            // 绑定下载按钮点击事件
-            document.getElementById('download-html').addEventListener('click', downloadAsHtml);
-        });
+            // 问答表单事件
+            document.getElementById('question-form').addEventListener('submit', handleQuestionSubmit);
 
-        // 修复当前路径按钮功能
-        async function getCurrentKnowledgeBase() {
+            // 下载事件
+            document.getElementById('download-html').addEventListener('click', downloadAsHtml);
+
+            // 文件管理事件
+            document.getElementById('folder-upload-form').addEventListener('submit', handleFileUpload);
+            document.getElementById('template-upload-form').addEventListener('submit', handleTemplateUpload);
+            document.getElementById('create-folder-btn').addEventListener('click', handleCreateFolder);
+        }
+
+        // 会话管理函数
+        async function createNewSession() {
             try {
-                const response = await fetch('/get_knowledge_base');
-                if (!response.ok) {
-                    throw new Error(`HTTP错误: ${response.status}`);
-                }
-                const data = await response.json();
-                if (data.knowledge_base) {
-                    document.getElementById('knowledge-base-path').value = data.knowledge_base;
+                const knowledgeBasePath = document.getElementById('knowledge-base-path').value.trim();
+                const response = await fetch('/sessions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        user_id: currentUserId,
+                        knowledge_base_path: knowledgeBasePath,
+                        title: '新对话'
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    currentSessionId = result.session_id;
+                    updateSessionInfo();
+                    clearConversation();
+                    loadConversationHistory();
+                    alert('新会话已创建');
                 } else {
-                    alert('未获取到当前知识库路径');
+                    throw new Error(result.error || '创建会话失败');
                 }
             } catch (error) {
-                console.error('获取当前知识库路径失败:', error);
-                alert('获取当前路径失败: ' + error.message);
+                console.error('创建会话失败:', error);
+                alert('创建会话失败: ' + error.message);
             }
         }
 
-        // 保存完整的回答内容（在流式处理中更新）
-        let fullAnswerContent = '';
-        let fullReferencesContent = '';
-        // 问答功能（流式 + Markdown 渲染）
-        // 修改JS中的显示逻辑
-        document.getElementById('question-form').addEventListener('submit', async function(e) {
+        async function showSessionsModal() {
+            try {
+                const response = await fetch(`/sessions?user_id=${currentUserId}`);
+                const result = await response.json();
+
+                if (result.success) {
+                    renderSessionsList(result.sessions);
+                    document.getElementById('sessions-modal').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('获取会话列表失败:', error);
+            }
+        }
+
+        function closeSessionsModal() {
+            document.getElementById('sessions-modal').classList.add('hidden');
+        }
+
+        function renderSessionsList(sessions) {
+            const container = document.getElementById('sessions-list');
+            container.innerHTML = '';
+
+            if (sessions.length === 0) {
+                container.innerHTML = '<p>暂无会话</p>';
+                return;
+            }
+
+            sessions.forEach(session => {
+                const sessionItem = document.createElement('div');
+                sessionItem.className = 'session-item';
+                if (session.session_id === currentSessionId) {
+                    sessionItem.classList.add('active');
+                }
+
+                sessionItem.innerHTML = `
+                    <div class="session-info">
+                        <strong>${session.title || '无标题'}</strong>
+                        <span class="session-date">${new Date(session.updated_at).toLocaleString()}</span>
+                        <span class="session-kb">知识库: ${session.knowledge_base_path || '默认'}</span>
+                    </div>
+                    <div class="session-actions">
+                        <button class="switch-session-btn" data-session-id="${session.session_id}">切换</button>
+                        <button class="view-history-btn" data-session-id="${session.session_id}">查看</button>
+                        <button class="delete-session-btn" data-session-id="${session.session_id}">删除</button>
+                    </div>
+                `;
+
+                container.appendChild(sessionItem);
+            });
+
+            // 绑定按钮事件
+            document.querySelectorAll('.switch-session-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const sessionId = e.target.getAttribute('data-session-id');
+                    switchSession(sessionId);
+                });
+            });
+
+            document.querySelectorAll('.view-history-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const sessionId = e.target.getAttribute('data-session-id');
+                    viewSessionHistory(sessionId);
+                });
+            });
+
+            document.querySelectorAll('.delete-session-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const sessionId = e.target.getAttribute('data-session-id');
+                    deleteSession(sessionId);
+                });
+            });
+        }
+
+        async function switchSession(sessionId) {
+            try {
+                currentSessionId = sessionId;
+                updateSessionInfo();
+                loadConversationHistory();
+                closeSessionsModal();
+                alert('已切换到选定会话');
+            } catch (error) {
+                console.error('切换会话失败:', error);
+            }
+        }
+
+        async function viewSessionHistory(sessionId) {
+            try {
+                const response = await fetch(`/sessions/${sessionId}/messages`);
+                const result = await response.json();
+
+                if (result.success) {
+                    displaySessionHistory(result.messages);
+                }
+            } catch (error) {
+                console.error('获取会话历史失败:', error);
+            }
+        }
+
+        async function deleteSession(sessionId) {
+            if (!confirm('确定要删除这个会话吗？')) return;
+
+            try {
+                const response = await fetch('/sessions', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ session_id: sessionId })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    if (sessionId === currentSessionId) {
+                        createNewSession(); // 创建新会话替代被删除的会话
+                    }
+                    showSessionsModal(); // 刷新列表
+                }
+            } catch (error) {
+                console.error('删除会话失败:', error);
+            }
+        }
+
+        function updateSessionInfo() {
+            const infoElement = document.getElementById('current-session-info');
+            infoElement.textContent = `当前会话: ${currentSessionId.substring(0, 8)}...`;
+        }
+
+        async function loadConversationHistory() {
+            if (!currentSessionId) return;
+
+            try {
+                const response = await fetch(`/sessions/${currentSessionId}/messages?limit=10`);
+                const result = await response.json();
+
+                if (result.success && result.messages.length > 0) {
+                    document.getElementById('conversation-history').classList.remove('hidden');
+                    displaySessionHistory(result.messages);
+                } else {
+                    document.getElementById('conversation-history').classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('加载对话历史失败:', error);
+            }
+        }
+
+        function displaySessionHistory(messages) {
+            const container = document.getElementById('history-messages');
+            container.innerHTML = '';
+
+            messages.forEach(message => {
+                const messageElement = document.createElement('div');
+                messageElement.className = `message ${message.role}`;
+
+                const content = message.role === 'user' ?
+                    `问: ${message.content}` :
+                    `答: ${message.content.substring(0, 100)}...`;
+
+                messageElement.textContent = content;
+                container.appendChild(messageElement);
+            });
+        }
+
+        function clearConversation() {
+            document.getElementById('answer').innerHTML = '';
+            document.getElementById('references').innerHTML = '';
+            document.getElementById('conversation-history').classList.add('hidden');
+            document.getElementById('download-html').style.display = 'none';
+        }
+
+        // 修改问答处理函数
+        async function handleQuestionSubmit(e) {
             e.preventDefault();
 
             const questionInput = document.getElementById('question-input');
             const knowledgeBaseInput = document.getElementById('knowledge-base-path');
-
             const question = questionInput.value.trim();
             const knowledgeBasePath = knowledgeBaseInput.value.trim();
 
             if (!question) return;
 
-            // 重置状态
-            document.getElementById('answer').innerHTML = '';
-            document.getElementById('references').innerHTML = '';
+            // 如果没有会话，先创建
+            if (!currentSessionId) {
+                await createNewSession();
+            }
 
-            // 显示loading，同时确保回答区域可见以便展示流式内容
+            // 重置状态
+            clearConversation();
             document.getElementById('loading-container').classList.remove('hidden');
             document.getElementById('answer-container').classList.remove('hidden');
 
             try {
-                // 重置完整内容变量
                 fullAnswerContent = '';
                 fullReferencesContent = '';
-                // 隐藏下载按钮
-                document.getElementById('download-html').style.display = 'none';
 
-                // 以SSE方式读取流式响应（保持不变）
-                const params = new URLSearchParams();
-                params.append('question', question);
-                if (knowledgeBasePath) params.append('knowledge_base_path', knowledgeBasePath);
+                // 使用JSON格式发送请求，包含会话信息
+                const requestData = {
+                    question: question,
+                    knowledge_base_path: knowledgeBasePath,
+                    session_id: currentSessionId,
+                    user_id: currentUserId,
+                    new_session: false
+                };
 
                 const response = await fetch('/ask_stream', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Content-Type': 'application/json',
                     },
-                    body: params
+                    body: JSON.stringify(requestData)
                 });
 
                 if (!response.ok) {
                     throw new Error(`HTTP错误: ${response.status}`);
                 }
 
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder('utf-8');
-                let buffer = '';
-                let mdContent = '';
+                await processStreamResponse(response);
 
-                while (true) {
-                    const { value, done } = await reader.read();
-                    if (done) break;
-                    buffer += decoder.decode(value, { stream: true });
-
-                    // 解析SSE帧（保持不变）
-                    let idx;
-                    while ((idx = buffer.indexOf('\n\n')) !== -1) {
-                        const rawFrame = buffer.slice(0, idx).trim();
-                        buffer = buffer.slice(idx + 2);
-                        if (!rawFrame.startsWith('data:')) continue;
-                        const payload = rawFrame.slice(5);
-                        let frame;
-                        try { frame = JSON.parse(payload); } catch { continue; }
-
-                        if (frame.type === 'chunk') {
-                            mdContent += frame.content || '';
-                            // 实时渲染流式内容
-                            document.getElementById('answer').innerHTML = marked.parse(mdContent);
-                            // 自动滚动到底部，方便查看新内容
-                            document.getElementById('answer').scrollTop = document.getElementById('answer').scrollHeight;
-                        } else if (frame.type === 'end') {
-                            // 处理结束帧（保持不变）
-                            const kb = frame.knowledge_base_used || '';
-                            if (kb) {
-                                const kbInfo = document.createElement('p');
-                                kbInfo.className = 'knowledge-base-used';
-                                kbInfo.textContent = `使用的知识库: ${kb}`;
-                                document.getElementById('answer').appendChild(kbInfo);
-                                // 添加到完整内容
-                                fullAnswerContent += kbInfo.outerHTML;
-                            }
-
-                            const sources = frame.sources || [];
-                            if (sources.length > 0) {
-                                const ul = document.createElement('ul');
-                                const title = document.createElement('h3');
-                                title.textContent = '参考来源:';
-                                document.getElementById('references').appendChild(title);
-                                sources.forEach(s => {
-                                    const li = document.createElement('li');
-                                    const sim = (s.similarity !== undefined) ? s.similarity : (s.distance !== undefined ? (1 - s.distance) : undefined);
-                                    const text = s.title ? `${s.title}${sim !== undefined ? ` (相似度: ${sim.toFixed(3)})` : ''}` : (s.content ? s.content.slice(0, 60) + '...' : JSON.stringify(s));
-                                    li.textContent = text;
-                                    ul.appendChild(li);
-                                });
-                                document.getElementById('references').appendChild(ul);
-                                // 保存完整参考来源内容
-                                fullReferencesContent = title.outerHTML + ul.outerHTML;
-                            }
-                            // 关键：回答生成完成后显示下载按钮
-                            document.getElementById('download-html').style.display = 'inline-block';
-                        }
-                    }
-                }
             } catch (error) {
                 document.getElementById('answer').innerHTML = `<p class="error">请求失败: ${error.message}</p>`;
             } finally {
-                // 隐藏loading，保留回答区域
                 document.getElementById('loading-container').classList.add('hidden');
                 questionInput.value = '';
+                // 重新加载对话历史
+                loadConversationHistory();
             }
-        });
+        }
+
+        // 流式响应处理
+        async function processStreamResponse(response) {
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+            let mdContent = '';
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                let idx;
+                while ((idx = buffer.indexOf('\n\n')) !== -1) {
+                    const rawFrame = buffer.slice(0, idx).trim();
+                    buffer = buffer.slice(idx + 2);
+
+                    if (!rawFrame.startsWith('data:')) continue;
+
+                    const payload = rawFrame.slice(5);
+                    let frame;
+                    try {
+                        frame = JSON.parse(payload);
+                    } catch {
+                        continue;
+                    }
+
+                    if (frame.type === 'start') {
+                        console.log('开始接收流式响应，会话ID:', frame.session_id);
+                    } else if (frame.type === 'chunk') {
+                        mdContent += frame.content || '';
+                        document.getElementById('answer').innerHTML = marked.parse(mdContent);
+                        document.getElementById('answer').scrollTop = document.getElementById('answer').scrollHeight;
+                    } else if (frame.type === 'end') {
+                        handleEndFrame(frame);
+                    }
+                }
+            }
+        }
+
+        function handleEndFrame(frame) {
+            // 更新会话信息
+            if (frame.session_id && frame.session_id !== currentSessionId) {
+                currentSessionId = frame.session_id;
+                updateSessionInfo();
+            }
+
+            // 添加知识库信息
+            if (frame.knowledge_base_used) {
+                const kbInfo = document.createElement('p');
+                kbInfo.className = 'knowledge-base-used';
+                kbInfo.textContent = `使用的知识库: ${frame.knowledge_base_used}`;
+                document.getElementById('answer').appendChild(kbInfo);
+            }
+
+            // 添加参考来源
+            const sources = frame.sources || [];
+            if (sources.length > 0) {
+                const ul = document.createElement('ul');
+                const title = document.createElement('h3');
+                title.textContent = '参考来源:';
+                document.getElementById('references').appendChild(title);
+
+                sources.forEach(s => {
+                    const li = document.createElement('li');
+                    const sim = (s.similarity !== undefined) ? s.similarity : (s.distance !== undefined ? (1 - s.distance) : undefined);
+                    const text = s.title ? `${s.title}${sim !== undefined ? ` (相似度: ${sim.toFixed(3)})` : ''}` :
+                                 (s.content ? s.content.slice(0, 60) + '...' : JSON.stringify(s));
+                    li.textContent = text;
+                    ul.appendChild(li);
+                });
+                document.getElementById('references').appendChild(ul);
+            }
+
+            // 显示下载按钮
+            document.getElementById('download-html').style.display = 'inline-block';
+        }
+
+        // 原有的文件管理函数保持不变
+        async function getCurrentKnowledgeBase() {
+            try {
+                const response = await fetch('/get_knowledge_base');
+                const data = await response.json();
+                if (data.knowledge_base) {
+                    document.getElementById('knowledge-base-path').value = data.knowledge_base;
+                }
+            } catch (error) {
+                console.error('获取当前知识库路径失败:', error);
+            }
+        }
 
         // 添加下载HTML功能
         // 修改下载功能的JavaScript代码
