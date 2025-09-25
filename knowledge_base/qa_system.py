@@ -4,6 +4,8 @@ from datetime import datetime
 
 import chromadb
 from typing import List, Dict, Any
+import re
+import html
 
 from chromadb import Settings
 
@@ -293,6 +295,75 @@ class TimeSeriesQA:
 
         return similar_docs
 
+    def _bing_search(self, query: str) -> List[Dict[str, str]]:
+        """使用必应国内版进行搜索并解析前若干结果（无额外第三方依赖）。"""
+        if not getattr(self.config, 'WEB_SEARCH_ENABLED', True):
+            return []
+        try:
+            params = {
+                'q': query,
+                'mkt': getattr(self.config, 'WEB_SEARCH_MKT', 'zh-CN')
+            }
+            url = getattr(self.config, 'WEB_SEARCH_ENGINE_URL', 'https://cn.bing.com/search')
+            timeout = getattr(self.config, 'WEB_SEARCH_TIMEOUT', 8)
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36'
+            }
+            resp = requests.get(url, params=params, timeout=timeout, headers=headers)
+            text = resp.text
+            # 解析常见结果块：<li class="b_algo"> ...
+            results = []
+            for m in re.finditer(r'<li class=\"b_algo\"[\s\S]*?<h2>[\s\S]*?<a href=\"(.*?)\"[^>]*>([\s\S]*?)</a>[\s\S]*?</h2>[\s\S]*?(?:<p[^>]*>([\s\S]*?)</p>)?', text):
+                link = html.unescape(re.sub(r'\s+', ' ', m.group(1) or '').strip())
+                title_raw = re.sub(r'<.*?>', '', m.group(2) or '')
+                title = html.unescape(re.sub(r'\s+', ' ', title_raw).strip())
+                snippet_raw = re.sub(r'<.*?>', '', m.group(3) or '')
+                snippet = html.unescape(re.sub(r'\s+', ' ', snippet_raw).strip())
+                if link and title:
+                    results.append({'title': title, 'snippet': snippet, 'link': link})
+                if len(results) >= getattr(self.config, 'WEB_SEARCH_TOPN', 3):
+                    break
+            # 回退：若未匹配到b_algo，尝试通用a标签解析
+            if not results:
+                for m in re.finditer(r'<a href=\"(https?://[^\"]+)\"[^>]*>([\s\S]*?)</a>', text):
+                    link = html.unescape(m.group(1))
+                    title = html.unescape(re.sub(r'<.*?>', '', m.group(2) or '').strip())
+                    if 'bing.com' in link:
+                        continue
+                    if title:
+                        results.append({'title': title, 'snippet': '', 'link': link})
+                    if len(results) >= getattr(self.config, 'WEB_SEARCH_TOPN', 3):
+                        break
+            return results
+        except Exception:
+            return []
+
+    def _summarize_web_results(self, results: List[Dict[str, str]]) -> str:
+        """将搜索结果压缩为简短中文摘要，并列出可引用的关键信息。"""
+        if not results:
+            return "未检索到可用的网络资料。"
+        bullets = []
+        for i, r in enumerate(results, 1):
+            title = r.get('title', '')
+            snippet = r.get('snippet', '')
+            link = r.get('link', '')
+            piece = f"{i}. {title} — {snippet}"
+            bullets.append(piece.strip(' —'))
+        # 简要合成说明
+        summary = "\n".join(bullets)
+        return summary
+
+    def _build_search_query(self, question: str, context_text: str, template_text: str) -> str:
+        # 使用用户问题 + 上下文里前若干关键词来构建检索词
+        base = question.strip()
+        extras = []
+        if context_text:
+            extras.append(context_text[:120])
+        if template_text:
+            extras.append(template_text[:80])
+        joined = " ".join([base] + extras)
+        return re.sub(r"\s+", " ", joined)
+
     def generate_answer_with_context(self, query: str, context: List[Dict[str, Any]],report: List[Dict[str, Any]]) -> str:
         """基于上下文生成答案"""
         #读取template文件 TODO
@@ -313,8 +384,17 @@ class TimeSeriesQA:
         context_text = "\n\n".join([f"相关文档 {i + 1} (相似度: {doc['similarity']:.2f}):\n{doc['content']}"
                                     for i, doc in enumerate(context)])
 
+        # 联网搜索并摘要
+        web_summary = ""
+        web_sources = []
+        if getattr(self.config, 'WEB_SEARCH_ENABLED', True):
+            search_q = self._build_search_query(query, context_text, template)
+            web_results = self._bing_search(search_q)
+            web_summary = self._summarize_web_results(web_results)
+            web_sources = web_results
+
         # 构建提示词
-        prompt = f"""你是一个社会调研专家。基于以下相关知识，请回答用户的问题。
+        prompt = f"""你是一个社会调研专家。基于以下相关知识与联网检索摘要，请回答用户的问题。
 
 相关背景知识：
 {context_text}
@@ -322,9 +402,11 @@ class TimeSeriesQA:
 {template}
 参考数据：
 {report}
+联网检索摘要（必应国内版）：
+{web_summary}
 用户问题：{query}
 
-使用模板结合背景知识来生成回答，并且在模板里面引用相关数据，具体数据用参考数据里面的数据。"""
+使用模板结合背景知识与联网摘要来生成回答，并在模板里引用相关数据和事实，保证数据真实性，并在必要处给出来源编号。"""
 
         messages = [
             {"role": "system", "content": "你是一个社会调研专家。"},
@@ -333,6 +415,10 @@ class TimeSeriesQA:
 
         try:
             response = self.llm_provider.generate_response(messages)
+            # 将来源附在结尾，便于前端查看
+            if web_sources:
+                refs = "\n".join([f"[{i+1}] {item.get('title','')} ({item.get('link','')})" for i, item in enumerate(web_sources)])
+                response = f"{response}\n\n参考链接:\n{refs}"
             return response
         except Exception as e:
             return f"生成回答时出错: {str(e)}"
@@ -351,12 +437,22 @@ class TimeSeriesQA:
             print(f"读取模板文件时出错: {e}")
             template = "# 错误\n\n无法加载模板文件。"
 
-        """当没有本地上下文时，使用LLM的一般知识回答"""
-        prompt = f"""你是一个社会调研专家。请回答以下关于社会调研专家的问题。
+        """当没有本地上下文时，使用LLM的一般知识回答，同时加入联网摘要"""
+        web_summary = ""
+        web_sources = []
+        if getattr(self.config, 'WEB_SEARCH_ENABLED', True):
+            search_q = self._build_search_query(query, "", template)
+            web_results = self._bing_search(search_q)
+            web_summary = self._summarize_web_results(web_results)
+            web_sources = web_results
+
+        prompt = f"""你是一个社会调研专家。请回答以下问题，并参考联网检索摘要：
 
 用户问题：{query}
 使用模板:{template}
-请基于你的专业知识提供准确、专业的回答。如果你是推测或不确定，请说明。"""
+联网检索摘要（必应国内版）：
+{web_summary}
+请基于你的专业知识与联网摘要提供准确、专业的回答；若为推测或不确定，请说明。"""
 
         messages = [
             {"role": "system", "content": "你是一个社会调研专家。"},
@@ -365,6 +461,9 @@ class TimeSeriesQA:
 
         try:
             response = self.llm_provider.generate_response(messages)
+            if web_sources:
+                refs = "\n".join([f"[{i+1}] {item.get('title','')} ({item.get('link','')})" for i, item in enumerate(web_sources)])
+                response = f"{response}\n\n参考链接:\n{refs}"
             return response
         except Exception as e:
             return f"生成回答时出错: {str(e)}"
@@ -566,25 +665,36 @@ class TimeSeriesQA:
                     template = self._read_template_file()
                 except Exception:
                     template = "# 默认模板\n\n这是一个默认的回答模板。"
+                # 联网搜索摘要
+                web_summary = ""
+                if getattr(self.config, 'WEB_SEARCH_ENABLED', True):
+                    search_q = self._build_search_query(question, context_text, template)
+                    web_summary = self._summarize_web_results(self._bing_search(search_q))
                 prompt = (
-                    "你是一个社会调研专家。基于以下相关知识，请回答用户的问题。\n\n"
+                    "你是一个社会调研专家。基于以下相关知识与联网检索摘要，请回答用户的问题。\n\n"
                     f"相关背景知识：\n{context_text}\n"
                     "套用模板：\n"
                     f"{template}\n"
                     f"用户问题：{question}\n"
                     f"数据参考：{report}\n"
-                    "使用模板结合背景知识来生成回答,要在回答里面放入具体数据，具体数据中的数据可以套用,一定要保证数据的真实性。"
+                    f"联网检索摘要（必应国内版）：\n{web_summary}\n"
+                    "使用模板结合背景知识与联网摘要来生成回答,在回答中放入具体数据并保证真实性。"
                 )
             else:
                 try:
                     template = self._read_template_file()
                 except Exception:
                     template = "# 默认模板\n\n这是一个默认的回答模板。"
+                web_summary = ""
+                if getattr(self.config, 'WEB_SEARCH_ENABLED', True):
+                    search_q = self._build_search_query(question, "", template)
+                    web_summary = self._summarize_web_results(self._bing_search(search_q))
                 prompt = (
-                    "你是一个社会调研专家。请回答以下关于社会调研专家的问题。\n\n"
+                    "你是一个社会调研专家。请回答以下问题，并参考联网检索摘要。\n\n"
                     f"用户问题：{question}\n"
                     f"使用模板:{template}\n"
-                    "请基于你的专业知识提供准确、专业的回答。如果你是推测或不确定，请说明。"
+                    f"联网检索摘要（必应国内版）：\n{web_summary}\n"
+                    "请基于你的专业知识与联网摘要提供准确、专业的回答；若为推测或不确定，请说明。"
                 )
 
             messages = [
@@ -660,7 +770,7 @@ class TimeSeriesQA:
             template = "# 默认模板\n\n这是一个默认的回答模板。"
 
         # 构建基础系统提示
-        system_prompt = """你是一个社会调研专家。请基于以下上下文进行对话："""
+        system_prompt = """你是一个社会调研专家。请基于以下上下文与联网检索摘要进行对话："""
 
         # 如果有相关文档，添加上下文
         context_text = ""
@@ -680,7 +790,14 @@ class TimeSeriesQA:
 数据参考：
 {report}
 
-请使用模板结合背景知识来生成回答，在回答中放入具体数据，保证数据的真实性。"""
+联网检索摘要（必应国内版）：
+"""
+            # 注入联网摘要
+            web_summary = ""
+            if getattr(self.config, 'WEB_SEARCH_ENABLED', True):
+                search_q = self._build_search_query(question, context_text, template)
+                web_summary = self._summarize_web_results(self._bing_search(search_q))
+            system_prompt += f"{web_summary}\n\n请使用模板结合背景知识与联网摘要来生成回答，在回答中放入具体数据，保证数据的真实性。"
 
         # 构建完整的消息列表
         messages = [{"role": "system", "content": system_prompt}]

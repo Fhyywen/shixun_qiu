@@ -44,6 +44,14 @@ class Config:
     FILE_HASH_DB = os.path.join(DATA_PATH, "file_hashes.json")
 
 
+    # 联网搜索配置（必应国内版）
+    WEB_SEARCH_ENABLED = os.getenv("WEB_SEARCH_ENABLED", "true").lower() == "true"
+    WEB_SEARCH_ENGINE_URL = os.getenv("WEB_SEARCH_ENGINE_URL", "https://cn.bing.com/search")
+    WEB_SEARCH_MKT = os.getenv("WEB_SEARCH_MKT", "zh-CN")
+    WEB_SEARCH_TOPN = int(os.getenv("WEB_SEARCH_TOPN", 3))
+    WEB_SEARCH_TIMEOUT = int(os.getenv("WEB_SEARCH_TIMEOUT", 8))
+
+
     # Flask配置
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
