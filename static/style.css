@@ -751,7 +751,7 @@ button:hover {
     text-align: right;
 }
 
-#download-html {
+#download-word {
     padding: 8px 16px;
     background: #20c997;
     color: white;
@@ -761,7 +761,7 @@ button:hover {
     transition: background 0.3s;
 }
 
-#download-html:hover {
+#download-word:hover {
     background: #19a97c;
 }
 
