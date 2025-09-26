@@ -494,6 +494,27 @@
                 document.getElementById('references').appendChild(ul);
             }
 
+            // 添加网络搜索参考链接
+            const webSources = frame.web_sources || [];
+            if (webSources.length > 0) {
+                const ul = document.createElement('ul');
+                const title = document.createElement('h3');
+                title.textContent = '参考链接:';
+                document.getElementById('references').appendChild(title);
+
+                webSources.forEach((source, index) => {
+                    const li = document.createElement('li');
+                    const a = document.createElement('a');
+                    a.href = source.link;
+                    a.target = '_blank';
+                    a.rel = 'noopener noreferrer';
+                    a.textContent = `[${index + 1}] ${source.title}`;
+                    li.appendChild(a);
+                    ul.appendChild(li);
+                });
+                document.getElementById('references').appendChild(ul);
+            }
+
             // 显示下载按钮
             document.getElementById('download-word').style.display = 'inline-block';
         }

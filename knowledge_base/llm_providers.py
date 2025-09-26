@@ -62,7 +62,7 @@ class LLMProvider:
                 messages=messages,
                 temperature=temperature,
                 top_p=kwargs.get('top_p', 0.8),
-                max_tokens=kwargs.get('max_tokens', 15000),  # 增加token限制
+                max_tokens=min(kwargs.get('max_tokens', 1000), 8192),  # 限制在API允许范围内
                 result_format='message'
             )
 
