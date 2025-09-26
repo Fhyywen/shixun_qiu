@@ -37,9 +37,16 @@
             <div class="template-upload-section">
                 <h4>上传回答模板文件</h4>
                 <form id="template-upload-form" enctype="multipart/form-data">
-                    <input type="file" id="template-file-upload"
-                           accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx,.pdf" />
-                    <button type="submit">上传模板</button>
+                    <div class="file-input-wrapper">
+                        <div class="file-input-area" id="template-file-area">
+                            <div class="file-input-text">点击选择模板文件或拖拽文件到这里</div>
+                            <div class="file-input-hint">支持 .txt, .md, .rst, .csv, .xlsx, .xls, .docx, .pdf 格式</div>
+                        </div>
+                        <input type="file" id="template-file-upload"
+                               accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx,.pdf" />
+                        <div class="file-preview" id="template-file-preview"></div>
+                    </div>
+                    <button type="submit" class="upload-button">上传模板</button>
                     <p class="template-info">上传后将替换当前回答模板，支持多种格式</p>
                 </form>
             </div>
@@ -91,8 +98,16 @@
                     <div id="folder-upload" class="upload-section hidden">
                         <h4>上传文件到当前目录</h4>
                         <form id="folder-upload-form" enctype="multipart/form-data">
-                            <input type="file" id="folder-file-upload" accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx,.pdf" multiple/>
-                            <button type="submit">上传</button>
+                            <div class="file-input-wrapper">
+                                <div class="file-input-area" id="folder-file-area">
+                                    <div class="file-input-text">点击选择文件或拖拽文件到这里</div>
+                                    <div class="file-input-hint">支持多选，可同时上传多个文件</div>
+                                </div>
+                                <input type="file" id="folder-file-upload"
+                                       accept=".txt,.md,.rst,.csv,.xlsx,.xls,.docx,.pdf" multiple/>
+                                <div class="file-preview" id="folder-file-preview"></div>
+                            </div>
+                            <button type="submit" class="upload-button">上传文件</button>
                         </form>
 
                         <div class="new-folder-section">
@@ -576,13 +591,22 @@ ${referencesContent}
                 } else {
                     alert(`成功上传 ${result.count} 个文件`);
                     loadStructure(getCurrentPath());
-                    fileInput.value = '';
+                    // 上传成功后清除文件选择和预览
+                    clearFileInput(fileInput, document.getElementById('folder-file-preview'));
                 }
             } catch (error) {
                 alert('上传失败: ' + error.message);
             }
         });
 
+        // 新增：清除文件输入和预览的函数
+        function clearFileInput(fileInput, previewElement) {
+            // 重置文件输入
+            fileInput.value = '';
+            // 清空预览区域
+            previewElement.innerHTML = '';
+            previewElement.classList.remove('active');
+        }
         // 模板文件上传处理 - 修复选择器
         document.querySelector('#template-upload-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -990,6 +1014,127 @@ ${referencesContent}
             const lastItem = pathItems[pathItems.length - 1];
             return lastItem.getAttribute('data-path') || '';
         }
+
+        // 文件上传区域交互功能
+function initFileUploadAreas() {
+    // 模板文件上传
+    const templateFileInput = document.getElementById('template-file-upload');
+    const templateFileArea = document.getElementById('template-file-area');
+    const templateFilePreview = document.getElementById('template-file-preview');
+
+    // 文件夹文件上传
+    const folderFileInput = document.getElementById('folder-file-upload');
+    const folderFileArea = document.getElementById('folder-file-area');
+    const folderFilePreview = document.getElementById('folder-file-preview');
+
+    // 初始化两个上传区域
+    initFileUploadArea(templateFileInput, templateFileArea, templateFilePreview, false);
+    initFileUploadArea(folderFileInput, folderFileArea, folderFilePreview, true);
+}
+
+function initFileUploadArea(fileInput, fileArea, filePreview, multiple) {
+    // 点击区域触发文件选择
+    fileArea.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    // 文件选择变化
+    fileInput.addEventListener('change', (e) => {
+        updateFilePreview(fileInput, filePreview, multiple);
+    });
+
+    // 拖拽功能
+    fileArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        fileArea.classList.add('drag-over');
+    });
+
+    fileArea.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        fileArea.classList.remove('drag-over');
+    });
+
+    fileArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        fileArea.classList.remove('drag-over');
+        fileInput.files = e.dataTransfer.files;
+        updateFilePreview(fileInput, filePreview, multiple);
+    });
+}
+
+function updateFilePreview(fileInput, filePreview, multiple) {
+    filePreview.innerHTML = '';
+
+    if (fileInput.files.length === 0) {
+        filePreview.classList.remove('active');
+        return;
+    }
+
+    filePreview.classList.add('active');
+
+    const files = multiple ? Array.from(fileInput.files) : [fileInput.files[0]];
+
+    files.forEach((file, index) => {
+        const fileItem = document.createElement('div');
+        fileItem.className = 'file-preview-item';
+
+        const fileSize = (file.size / 1024 / 1024).toFixed(2); // MB
+        const fileIcon = getFileIcon(file.name);
+
+        fileItem.innerHTML = `
+            <div class="file-info">
+                <span class="file-icon">${fileIcon}</span>
+                <div class="file-details">
+                    <div class="file-name">${file.name}</div>
+                    <div class="file-size">${fileSize} MB</div>
+                </div>
+            </div>
+            <button type="button" class="file-remove" data-index="${index}">×</button>
+        `;
+
+        filePreview.appendChild(fileItem);
+    });
+
+    // 绑定删除按钮事件
+    filePreview.querySelectorAll('.file-remove').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const index = parseInt(btn.getAttribute('data-index'));
+            removeFileFromInput(fileInput, index, multiple);
+            updateFilePreview(fileInput, filePreview, multiple);
+        });
+    });
+}
+
+function getFileIcon(filename) {
+    const ext = filename.toLowerCase().split('.').pop();
+    const icons = {
+        'txt': '📄', 'md': '📝', 'rst': '📝',
+        'csv': '📊', 'xlsx': '📊', 'xls': '📊',
+        'docx': '📘', 'doc': '📘', 'pdf': '📕'
+    };
+    return icons[ext] || '📁';
+}
+
+function removeFileFromInput(fileInput, index, multiple) {
+    if (!multiple) {
+        fileInput.value = '';
+        return;
+    }
+
+    const dt = new DataTransfer();
+    const files = Array.from(fileInput.files);
+    files.splice(index, 1);
+
+    files.forEach(file => dt.items.add(file));
+    fileInput.files = dt.files;
+}
+
+// 在DOM加载完成后初始化
+document.addEventListener('DOMContentLoaded', () => {
+    initFileUploadAreas();
+});
+
     </script>
 </body>
 </html>

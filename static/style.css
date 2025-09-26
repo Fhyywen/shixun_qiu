@@ -534,7 +534,10 @@ main {
 /* 文件上传样式 */
 .file-input-wrapper {
     position: relative;
-    margin-bottom: 15px;
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 .file-input-wrapper input[type="file"] {
@@ -545,6 +548,38 @@ main {
     width: 100%;
     height: 100%;
     cursor: pointer;
+}
+
+.file-input-area {
+    border: 2px dashed #4c6ef5;
+    border-radius: 12px;
+    padding: 30px;
+    text-align: center;
+    background: #f8f9ff;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+    .file-input-area:hover {
+    border-color: #3b5bdb;
+    background: #f0f2ff;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(76, 110, 245, 0.1);
+}
+
+.file-input-area::before {
+    content: '📁';
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 10px;
+}
+
+.file-input-area.drag-over {
+    border-color: #20c997;
+    background: #f0fff8;
+    transform: scale(1.02);
 }
 
 .file-input-button {
@@ -797,4 +832,149 @@ button:hover {
 #conversation-history::-webkit-scrollbar-thumb:hover,
 .modal-content::-webkit-scrollbar-thumb:hover {
     background: #a8a8a8;
+}
+
+.file-input-text {
+    color: #4c6ef5;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.file-input-hint {
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+.file-input-wrapper input[type="file"] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+}
+
+.file-preview {
+    margin-top: 15px;
+    display: none;
+}
+
+.file-preview.active {
+    display: block;
+}
+
+.file-preview-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 15px;
+    background: white;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border: 1px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.file-preview-item:hover {
+    border-color: #4c6ef5;
+    box-shadow: 0 2px 8px rgba(76, 110, 245, 0.1);
+}
+
+.file-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.file-icon {
+    font-size: 1.2rem;
+}
+
+.file-details {
+    text-align: left;
+}
+
+.file-name {
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 2px;
+}
+
+.file-size {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.file-remove {
+    background: none;
+    border: none;
+    color: #fa5252;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 4px;
+    transition: background 0.3s;
+}
+
+.file-remove:hover {
+    background: #fff5f5;
+}
+
+.upload-button {
+    width: 100%;
+    padding: 15px;
+    background: linear-gradient(120deg, #4c6ef5 0%, #3b5bdb 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 10px;
+}
+
+.upload-button:hover {
+    background: linear-gradient(120deg, #3b5bdb 0%, #2f4dbe 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(76, 110, 245, 0.3);
+}
+
+.upload-button:disabled {
+    background: #868e96;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* 模板上传区域特殊样式 */
+.template-upload-section .file-input-area {
+    border-color: #20c997;
+    background: #f0fff8;
+}
+
+.template-upload-section .file-input-area:hover {
+    border-color: #19a97c;
+    background: #e8fcf4;
+}
+
+.template-upload-section .file-input-text {
+    color: #20c997;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .file-input-area {
+        padding: 20px;
+    }
+
+    .file-preview-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .file-info {
+        width: 100%;
+    }
 }
