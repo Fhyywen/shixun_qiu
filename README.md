@@ -13,7 +13,7 @@ python -m pip install "paddleocr[all]"
 运行ocr_test.py成功运行即安装完成
 
 
-TimeSeries-Knowledge-Base/
+ResearchReport -Knowledge-Base/
 ├── app.py                      # Flask Web应用主入口
 ├── config.py                   # 应用配置文件
 ├── .env                        # 环境变量文件
@@ -120,3 +120,5 @@ CREATE TABLE IF NOT EXISTS knowledge_base_usage (
     INDEX idx_knowledge_base (knowledge_base_path(200)),
     FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE
 );
+
+在config.py中修改mysql数据库的用户名，密码，端口号等等数据

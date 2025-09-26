@@ -37,7 +37,7 @@ class Config:
     CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 50))
 
     # 搜索配置
-    SEARCH_RESULTS_COUNT = int(os.getenv("SEARCH_RESULTS_COUNT", 3))
+    SEARCH_RESULTS_COUNT = int(os.getenv("SEARCH_RESULTS_COUNT", 5))
     TOP_K = SEARCH_RESULTS_COUNT
     SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", 0.5))
     # 在 Config 类中添加
@@ -65,7 +65,7 @@ class Config:
 
     # mysql
     MYSQL_HOST = os.getenv('MYSQL_HOST', 'localhost')
-    MYSQL_PORT = int(os.getenv('MYSQL_PORT', 3307))
+    MYSQL_PORT = int(os.getenv('MYSQL_PORT', 3306))
     MYSQL_USER = os.getenv('MYSQL_USER', 'root')
     MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD', 'root')
     MYSQL_DATABASE = os.getenv('MYSQL_DATABASE', 'knowledge_base_chat')
