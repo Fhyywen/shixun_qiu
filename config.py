@@ -7,7 +7,7 @@ load_dotenv()
 class Config:
     # 模型配置
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-large-zh-v1.5")
-    LLM_MODEL = os.getenv("LLM_MODEL", "openai")
+    LLM_MODEL = os.getenv("LLM_MODEL", "qwen")
 
     # OpenAI配置
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -17,7 +17,7 @@ class Config:
     # 通义千问配置
     TONGYI_API_KEY = os.getenv("TONGYI_API_KEY")
     TONGYI_API_BASE = os.getenv("TONGYI_API_BASE", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-    TONGYI_MODEL = os.getenv("TONGYI_MODEL", "qwen-max")
+    TONGYI_MODEL = os.getenv("TONGYI_MODEL", "qwen3-max")
 
     # Azure配置
     AZURE_API_KEY = os.getenv("AZURE_API_KEY")

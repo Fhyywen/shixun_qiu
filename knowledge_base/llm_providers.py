@@ -62,7 +62,7 @@ class LLMProvider:
                 messages=messages,
                 temperature=temperature,
                 top_p=kwargs.get('top_p', 0.8),
-                max_tokens=min(kwargs.get('max_tokens', 1000), 8192),  # 限制在API允许范围内
+                max_tokens=min(kwargs.get('max_tokens', 4000), 32768),  # 限制在API允许范围内
                 result_format='message'
             )
 
@@ -130,33 +130,59 @@ class LLMProvider:
             except Exception as e:
                 raise Exception(f"OpenAI 流式接口调用失败: {str(e)}")
 
+
         elif model_type == "tongyi":
+
             # 通义千问流式输出
+
             try:
+                print(f"调用通义千问流式API，模型: {self.config.TONGYI_MODEL}")  # 调试
                 stream = Generation.call(
                     model=self.config.TONGYI_MODEL,
                     messages=messages,
                     temperature=kwargs.get('temperature', 0.7),
                     top_p=kwargs.get('top_p', 0.8),
-                    max_tokens=kwargs.get('max_tokens', 2000),
+                    max_tokens=min(kwargs.get('max_tokens', 4000), 32768),
                     result_format='message',
                     stream=True,
                     incremental_output=True
                 )
-
+                token_count = 0
                 for event in stream:
-                    # 正常 token 增量
+                    token_count += 1
+                    print(f"收到流事件 {token_count}: {type(event)}")  # 调试
+
                     try:
-                        if getattr(event, 'output', None) and event.output and \
-                           getattr(event.output, 'choices', None) and event.output.choices:
-                            message = event.output.choices[0].message
-                            content = getattr(message, 'content', None)
-                            if content:
-                                yield content
-                    except Exception:
-                        # 忽略单次解析异常，继续流
+                        # 方法1：直接检查content属性
+                        if hasattr(event, 'output') and event.output:
+                            if hasattr(event.output, 'choices') and event.output.choices:
+                                choice = event.output.choices[0]
+                                if hasattr(choice, 'message') and choice.message:
+                                    content = getattr(choice.message, 'content', '')
+                                    if content:
+                                        print(f"输出内容: {content}")  # 调试
+                                        yield content
+                                        continue
+                        # 方法2：尝试其他可能的属性路径
+                        if hasattr(event, 'data') and event.data:
+                            data_content = getattr(event.data, 'content', '')
+                            if data_content:
+                                yield data_content
+                                continue
+                        # 方法3：打印事件结构以便调试
+                        if token_count <= 3:  # 只打印前几个事件的结构
+                            print(f"事件结构: {dir(event)}")
+                            if hasattr(event, '__dict__'):
+                                print(f"事件字典: {event.__dict__}")
+                    except Exception as parse_error:
+                        print(f"解析事件失败: {parse_error}")
                         continue
+                print(f"流式响应完成，共处理 {token_count} 个事件")  # 调试
+
             except Exception as e:
+                print(f"通义千问流式API调用失败: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 raise Exception(f"通义千问流式接口调用失败: {str(e)}")
 
         elif model_type == "azure":

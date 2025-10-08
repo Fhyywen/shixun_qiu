@@ -825,7 +825,6 @@ class TimeSeriesQA:
 
     def generate_answer_without_context(self, query: str) -> str:
 
-        #读取template文件 TODO
         try:
             template = self._read_template_file()
             print(f"成功读取模板文件: {self.config.ANSWER_TEMPLATE}")
@@ -1040,104 +1039,6 @@ class TimeSeriesQA:
             print(f"读取模板文件时出错: {e}")
             return "# 错误\n\n无法加载模板文件。"
 
-    def stream_answer_sse(self, question: str, knowledge_base_path: str = None):
-        """流式生成答案，直接产出 SSE 帧字符串（data:...\n\n）。
-
-        说明：
-        - 优先尝试底层 LLM 的原生流（token 级别），逐 token 推送。
-        - 若失败，则回退为一次性生成完整答案并按块切分模拟流。
-        - 末尾补充 sources / confidence / knowledge_base_used 等元信息。
-        """
-        # 起始帧
-        yield f"data:{json.dumps({'type': 'start'})}\n\n"
-
-        # 优先尝试原生流
-        try:
-            # 准备上下文与提示词，尽量与非流式逻辑保持一致
-            similar_docs = self.search_similar_documents(question)
-            report = self.analyze_knowledge_base(knowledge_base_path)
-            if similar_docs:
-                context_text = "\n\n".join([
-                    f"相关文档 {i + 1} (相似度: {doc['similarity']:.2f}):\n{doc['content']}"
-                    for i, doc in enumerate(similar_docs)
-                ])
-                try:
-                    template = self._read_template_file()
-                except Exception:
-                    template = "# 默认模板\n\n这是一个默认的回答模板。"
-                # 联网搜索摘要
-                web_summary = ""
-                if getattr(self.config, 'WEB_SEARCH_ENABLED', True):
-                    search_q = self._build_search_query(question, context_text, template)
-                    web_summary = self._summarize_web_results(self._bing_search(search_q))
-                prompt = (
-                    "你是一个社会调研专家。基于以下相关知识与联网检索摘要，请回答用户的问题。\n\n"
-                    f"相关背景知识：\n{context_text}\n"
-                    "套用模板：\n"
-                    f"{template}\n"
-                    f"用户问题：{question}\n"
-                    f"数据参考：{report}\n"
-                    f"联网检索摘要（必应国内版）：\n{web_summary}\n"
-                    "使用模板结合背景知识与联网摘要来生成回答,在回答中放入具体数据并保证真实性。"
-                )
-            else:
-                try:
-                    template = self._read_template_file()
-                except Exception:
-                    template = "# 默认模板\n\n这是一个默认的回答模板。"
-                web_summary = ""
-                if getattr(self.config, 'WEB_SEARCH_ENABLED', True):
-                    search_q = self._build_search_query(question, "", template)
-                    web_summary = self._summarize_web_results(self._bing_search(search_q))
-                prompt = (
-                    "你是一个社会调研专家。请回答以下问题，并参考联网检索摘要。\n\n"
-                    f"用户问题：{question}\n"
-                    f"使用模板:{template}\n"
-                    f"联网检索摘要（必应国内版）：\n{web_summary}\n"
-                    "请基于你的专业知识与联网摘要提供准确、专业的回答；若为推测或不确定，请说明。"
-                )
-
-            messages = [
-                {"role": "system", "content": "你是一个社会调研专家。"},
-                {"role": "user", "content": prompt}
-            ]
-
-            for token in self.llm_provider.stream_response(messages):
-                if token:
-                    frame = {"type": "chunk", "content": token}
-                    yield f"data:{json.dumps(frame, ensure_ascii=False)}\n\n"
-
-            # 末尾补充 meta 信息（基于非流式最终结果）
-            final_result = self.ask_question(question, knowledge_base_path)
-            meta = {
-                "type": "end",
-                "sources": final_result.get("sources", []),
-                "knowledge_base_used": final_result.get("knowledge_base_used", ""),
-                "confidence": final_result.get("confidence", 0)
-            }
-            yield f"data:{json.dumps(meta, ensure_ascii=False)}\n\n"
-            return
-        except Exception:
-            # 原生流失败时回退到模拟流
-            pass
-
-        # 回退：一次性生成并切块输出
-        result = self.ask_question(question, knowledge_base_path)
-        answer_text = result.get("answer", "")
-        chunk_size = 120
-        for i in range(0, len(answer_text), chunk_size):
-            chunk = answer_text[i:i + chunk_size]
-            frame = {"type": "chunk", "content": chunk}
-            yield f"data:{json.dumps(frame, ensure_ascii=False)}\n\n"
-
-        meta = {
-            "type": "end",
-            "sources": result.get("sources", []),
-            "knowledge_base_used": result.get("knowledge_base_used", ""),
-            "confidence": result.get("confidence", 0)
-        }
-        yield f"data:{json.dumps(meta, ensure_ascii=False)}\n\n"
-
     def create_session(self, user_id: str = "anonymous", knowledge_base_path: str = None,
                        title: str = "新对话") -> str:
         """创建新的对话会话"""
@@ -1170,7 +1071,7 @@ class TimeSeriesQA:
             template = "# 默认模板\n\n这是一个默认的回答模板。"
 
         # 构建基础系统提示
-        system_prompt = """你是一个社会调研专家。请基于以下上下文与联网检索摘要进行对话："""
+        system_prompt = """你是一个社会调研专家。请结合以下数据生成一个司法社会调研报告："""
 
         # 执行网络搜索（无论是否有本地文档）
         web_summary = ""
@@ -1187,7 +1088,7 @@ class TimeSeriesQA:
             else:
                 # 没有本地文档时，使用问题本身构建查询
                 search_q = self._build_search_query(question, "", template)
-            
+
             web_results = self._bing_search(search_q)
             web_summary = self._summarize_web_results(web_results)
 
