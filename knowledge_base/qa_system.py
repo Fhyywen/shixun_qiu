@@ -816,9 +816,9 @@ class TimeSeriesQA:
         try:
             response = self.llm_provider.generate_response(messages)
             # 将来源附在结尾，便于前端查看
-            if web_sources:
-                refs = "\n".join([f"[{i+1}] {item.get('title','')} ({item.get('link','')})" for i, item in enumerate(web_sources)])
-                response = f"{response}\n\n参考链接:\n{refs}"
+            # if web_sources:
+            #     refs = "\n".join([f"[{i+1}] {item.get('title','')} ({item.get('link','')})" for i, item in enumerate(web_sources)])
+            #     response = f"{response}\n\n参考链接:\n{refs}"
             return response
         except Exception as e:
             return f"生成回答时出错: {str(e)}"
@@ -860,9 +860,9 @@ class TimeSeriesQA:
 
         try:
             response = self.llm_provider.generate_response(messages)
-            if web_sources:
-                refs = "\n".join([f"[{i+1}] {item.get('title','')} ({item.get('link','')})" for i, item in enumerate(web_sources)])
-                response = f"{response}\n\n参考链接:\n{refs}"
+            # if web_sources:
+            #     refs = "\n".join([f"[{i+1}] {item.get('title','')} ({item.get('link','')})" for i, item in enumerate(web_sources)])
+            #     response = f"{response}\n\n参考链接:\n{refs}"
             return response
         except Exception as e:
             return f"生成回答时出错: {str(e)}"
