@@ -31,7 +31,12 @@ ALLOWED_EXTENSIONS = ['.txt', '.md', '.rst', '.csv', '.xlsx', '.xls', '.docx','.
 PADDLE_INSTALL_FLAG = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.paddle_installed')
 
 def ensure_paddle_for_pdf():
-    """首次检测到 PDF 时安装所需的 Paddle 依赖（仅执行一次）。"""
+    """
+    功能：首次检测到PDF文件时，自动安装PaddlePaddle相关依赖（仅执行一次）
+    参数：无
+    返回：无
+    异常：捕获安装过程中的所有异常，记录日志但不抛出（避免阻塞主流程）
+    """
     try:
         # 已安装则跳过
         if os.path.exists(PADDLE_INSTALL_FLAG):
@@ -62,11 +67,26 @@ def ensure_paddle_for_pdf():
 
 @app.route('/')
 def index():
+    """
+       功能：渲染应用首页
+       参数：无
+       返回：首页HTML模板字符串
+       异常：无（Flask框架会自动处理模板渲染异常）
+       """
     return render_template('index.html')
 
 
 @app.route('/ask', methods=['POST'])
 def ask_question():
+    """
+        功能：处理用户的问答请求，根据指定知识库路径回答用户问题
+        参数：
+            入参来源：POST请求的JSON体、表单或URL查询参数
+            question: 用户提出的问题字符串（必传）
+            knowledge_base_path: 知识库文件存储路径（可选，默认使用配置文件中的路径）
+        返回：JSON格式响应，包含回答内容、来源文档、置信度、来源类型、使用的知识库路径
+        异常：捕获所有处理过程中的异常，返回包含错误信息的JSON响应
+        """
     try:
         # 尝试从不同的内容类型获取问题
         if request.is_json:
@@ -112,7 +132,18 @@ def ask_question():
 
 @app.route('/ask_stream', methods=['POST'])
 def ask_question_stream():
-    """流式返回答案（SSE），支持多轮对话和会话管理"""
+    """
+    功能：流式返回问答结果（基于SSE服务器发送事件），支持多轮对话和会话生命周期管理
+    参数：
+        入参来源：POST请求的JSON体或表单
+        question: 用户提出的问题字符串（必传）
+        knowledge_base_path: 知识库文件存储路径（可选，默认使用配置文件中的路径）
+        session_id: 会话ID（可选，用于关联多轮对话上下文）
+        user_id: 用户ID（可选，默认值'anonymous'，用于区分不同用户）
+        new_session: 是否创建新会话（可选，布尔值，默认False）
+    返回：SSE格式的流式响应，包含逐段返回的回答内容；参数错误返回400，系统异常返回500
+    异常：捕获所有处理过程中的异常，记录日志并返回包含错误信息的JSON响应
+    """
     try:
         if request.is_json:
             data = request.get_json()
@@ -179,7 +210,23 @@ def ask_question_stream():
 
 @app.route('/sessions', methods=['GET', 'POST', 'DELETE'])
 def manage_sessions():
-    """会话管理接口"""
+    """
+    功能：会话全生命周期管理接口，支持获取用户会话列表、创建新会话、关闭指定会话
+    参数：
+        通用参数：
+            user_id: 用户ID（可选，默认值'anonymous'，来源：URL查询参数或JSON请求体）
+        GET方法：无额外参数，根据user_id获取会话列表
+        POST方法：
+            knowledge_base_path: 知识库文件存储路径（可选，默认使用配置文件路径）
+            title: 会话标题（可选，默认值'新对话'）
+        DELETE方法：
+            session_id: 要关闭的会话ID（必传，来源：JSON请求体）
+    返回：
+        GET：JSON响应，包含success状态、sessions会话列表、count会话数量
+        POST：JSON响应，包含success状态、session_id新会话ID、message提示信息
+        DELETE：JSON响应，包含success状态、message提示信息；缺少session_id返回400
+    异常：捕获所有处理过程中的异常，记录日志并返回包含错误信息的JSON响应（状态码500）
+    """
     try:
         user_id = request.args.get('user_id', 'anonymous') or request.json.get('user_id', 'anonymous')
 
@@ -234,7 +281,16 @@ def manage_sessions():
 
 @app.route('/sessions/<session_id>/messages', methods=['GET'])
 def get_session_messages(session_id):
-    """获取指定会话的消息历史"""
+    """
+    功能：获取指定会话ID的消息历史记录，支持限制返回消息数量
+    参数：
+        路径参数：
+            session_id: 会话唯一标识（必传，从URL路径中获取）
+        URL查询参数：
+            limit: 返回消息的最大数量（可选，默认值100，需为整数）
+    返回：JSON响应，包含success状态、session_id、messages消息列表、count消息总数
+    异常：捕获所有处理过程中的异常，记录日志并返回包含错误信息的JSON响应（状态码500）
+    """
     try:
         limit = request.args.get('limit', 100, type=int)
         messages = qa_system.get_session_messages(session_id, limit)
@@ -252,7 +308,18 @@ def get_session_messages(session_id):
 
 @app.route('/sessions/<session_id>/title', methods=['PUT'])
 def update_session_title(session_id):
-    """更新会话标题"""
+    """
+    功能：更新指定会话ID的标题
+    参数：
+        路径参数：
+            session_id: 要更新标题的会话唯一标识（必传，从URL路径中获取）
+        请求体参数（JSON格式）：
+            title: 新的会话标题（必传，不能为空字符串）
+    返回：
+        成功：JSON响应，包含success状态、提示信息、会话ID、新标题
+        失败：标题为空返回400；系统异常返回500，包含错误信息
+    异常：捕获所有处理过程中的异常，记录日志并返回包含错误信息的JSON响应（状态码500）
+    """
     try:
         data = request.get_json() or {}
         new_title = data.get('title', '').strip()
@@ -276,7 +343,11 @@ def update_session_title(session_id):
 
 def convert_path_format(path):
     """
-    转换路径格式，确保与当前操作系统兼容
+    功能：转换文件路径格式，将Linux风格路径适配为Windows系统兼容的路径格式
+    参数：
+        path: 待转换的路径字符串（可能是Linux格式/Windows格式）
+    返回：适配当前操作系统的路径字符串（Windows系统返回\\分隔的路径，其他系统返回原路径）
+    异常：无（仅做字符串处理，不涉及IO或外部调用，无抛出异常）
     """
     # 如果是Linux格式的路径（以/开头）且在Windows系统上
     if path.startswith('/') and os.name == 'nt':
@@ -299,11 +370,25 @@ def convert_path_format(path):
 
 @app.route('/health')
 def health_check():
+    """
+        功能：服务健康状态检查接口，用于监控系统检测服务是否正常运行
+        参数：无（GET请求，无需传入任何参数）
+        返回：JSON格式响应，包含服务状态（status）和初始化状态（initialized）
+        异常：无（接口仅返回固定响应，无业务逻辑和异常处理）
+        """
     return jsonify({'status': 'healthy', 'initialized': True})
 
 
 @app.route('/build', methods=['POST'])
 def build_knowledge_base():
+    """
+        功能：触发知识库全量构建，解析知识库目录下的文档并生成可检索的文档块
+        参数：无（POST请求，无需传入任何参数，使用配置文件中指定的知识库路径）
+        返回：
+            成功：JSON响应，包含构建完成提示和处理的文档块数量
+            失败：JSON响应，包含构建过程中的错误信息（状态码默认200，仅返回error字段）
+        异常：捕获知识库构建过程中的所有异常，返回包含错误信息的JSON响应
+        """
     try:
         num_chunks = qa_system.build_knowledge_base()
         return jsonify({'message': f'知识库构建完成，共处理 {num_chunks} 个文档块'})
@@ -314,6 +399,14 @@ def build_knowledge_base():
 # 文件管理相关接口
 @app.route('/list-financial-files')
 def list_financial_files():
+    """
+        功能：列出知识库目录下所有允许类型的文件（财务相关文档）
+        参数：无（GET请求，无需传入任何参数）
+        返回：
+            成功：JSON格式的文件名称列表（仅包含允许扩展名的文件）
+            失败：JSON响应，包含获取文件列表失败的错误信息
+        异常：捕获文件目录读取、遍历过程中的所有异常，返回包含错误信息的JSON响应
+        """
     try:
         # 列出所有允许的文件类型
         files = [f for f in os.listdir(FINANCIAL_DIR)
@@ -326,6 +419,20 @@ def list_financial_files():
 
 @app.route('/upload-financial-file', methods=['POST'])
 def upload_financial_file():
+    """
+        功能：上传一个或多个财务相关文件到知识库目录，支持指定子文件夹存储
+        参数：
+            表单参数：
+                file: 待上传的文件（支持多文件，必传）
+                folder_path: 目标子文件夹路径（可选，默认存储到知识库根目录）
+        返回：
+            成功：JSON响应，包含上传成功提示和成功上传的文件数量
+            失败：
+                - 无文件部分/未选择文件：返回对应错误信息
+                - 文件类型不允许：返回不允许的文件名和支持的扩展名列表
+                - 文件保存失败：返回具体文件名和失败原因
+        异常：捕获文件保存过程中的异常，返回对应错误信息
+        """
     if 'file' not in request.files:
         return jsonify({'error': '没有文件部分'})
 
@@ -364,6 +471,20 @@ def upload_financial_file():
 
 @app.route('/delete-financial-file', methods=['POST'])
 def delete_financial_file():
+    """
+        功能：删除知识库目录下指定的财务文件，包含多重安全校验防止误删/越权删除
+        参数：
+            请求体参数（JSON格式）：
+                filename: 要删除的文件名（必传，包含扩展名）
+        返回：
+            成功：JSON响应，提示“文件已删除”
+            失败：
+                - 文件名为空：返回“文件名不能为空”
+                - 文件路径无效/扩展名不允许：返回“无效的文件请求”
+                - 文件不存在：返回“文件不存在”
+                - 删除失败：返回具体的错误原因
+        异常：捕获文件删除过程中的所有异常（如权限不足、文件被占用等），返回错误信息
+        """
     data = request.get_json()
     filename = data.get('filename')
 
@@ -390,7 +511,14 @@ def delete_financial_file():
 
 @app.route('/list-financial-structure')
 def list_financial_structure():
-    """获取知识库目录结构（包括文件和文件夹）"""
+    """
+    功能：递归获取知识库目录的完整结构（包含文件和子文件夹），跳过隐藏文件/文件夹
+    参数：无（GET请求，无需传入任何参数）
+    返回：
+        成功：JSON格式的目录结构列表，每个条目包含名称、相对路径、是否为目录、子节点（目录才有）
+        失败：JSON响应，包含获取目录结构失败的错误信息
+    异常：捕获目录遍历、递归过程中的所有异常（如权限不足、目录不存在等），返回错误信息
+    """
     try:
         def get_directory_structure(root_path):
             structure = []
@@ -420,6 +548,22 @@ def list_financial_structure():
 
 @app.route('/build-folder', methods=['POST'])
 def build_folder():
+    """
+       功能：编译知识库中指定文件夹内的所有文档，生成可检索的文档块（仅编译指定文件夹，非全量）
+       参数：
+           请求体参数（JSON格式）：
+               folder_path: 待编译的文件夹路径（相对于知识库根目录，必传）
+       返回：
+           成功：JSON响应，包含编译完成提示和处理的文档块数量
+           失败：
+               - 文件夹路径为空：返回“文件夹路径不能为空”
+               - 路径无效/非目录：返回“无效的文件夹路径”
+               - 文件编码错误：返回UTF-8编码提示
+               - 其他异常：返回具体的编译错误原因
+       异常：
+           - UnicodeDecodeError：专门捕获文件编码错误，返回友好提示
+           - 通用Exception：捕获编译过程中的其他异常（如路径不存在、权限不足等）
+       """
     """编译指定文件夹"""
     try:
         data = request.get_json()
@@ -435,9 +579,13 @@ def build_folder():
         if not full_path.startswith(FINANCIAL_DIR) or not os.path.isdir(full_path):
             return jsonify({'error': '无效的文件夹路径'})
 
-        # 调用编译函数
+        # 调用编译函数，传递编码处理参数
         num_chunks = qa_system.build_knowledge_base(full_path)
         return jsonify({'message': f'文件夹编译完成，共处理 {num_chunks} 个文档块'})
+
+    except UnicodeDecodeError as e:
+        # 专门处理编码错误
+        return jsonify({'error': f'文件编码错误: {str(e)}。请确保文件使用 UTF-8 编码'})
     except Exception as e:
         return jsonify({'error': f'编译文件夹时出错: {str(e)}'})
 
@@ -445,6 +593,19 @@ def build_folder():
 # 添加一个专门的路由来切换知识库
 @app.route('/switch_knowledge_base', methods=['POST'])
 def switch_knowledge_base():
+    """
+        功能：切换问答系统当前使用的知识库路径，使后续问答请求使用新的知识库
+        参数：
+            入参来源：POST请求的JSON体或表单
+            knowledge_base_path: 目标知识库的路径字符串（必传）
+        返回：
+            成功：JSON响应，提示已切换到指定知识库路径
+            失败：
+                - 未提供知识库路径：返回“请提供知识库路径”
+                - 切换操作失败：返回“切换知识库失败”+具体路径
+                - 系统异常：返回具体的错误原因
+        异常：捕获切换知识库过程中的所有异常（如路径不存在、权限不足、系统内部错误等），返回错误信息
+        """
     try:
         if request.is_json:
             data = request.get_json()
@@ -467,10 +628,31 @@ def switch_knowledge_base():
 
 @app.route('/get_knowledge_base', methods=['GET'])
 def get_knowledge_base():
+    """
+       功能：获取问答系统当前正在使用的知识库路径
+       参数：无（GET请求，无需传入任何参数）
+       返回：JSON格式响应，包含当前使用的知识库路径（字段名：knowledge_base）
+       异常：无（仅调用只读方法返回当前状态，无业务逻辑和异常处理）
+       """
     return jsonify({'knowledge_base': qa_system.get_current_knowledge_base()})
 
 @app.route('/create-folder', methods=['POST'])
 def create_folder():
+    """
+        功能：在知识库目录下创建新文件夹，支持指定父文件夹路径
+        参数：
+            请求体参数（JSON格式）：
+                folder_name: 新文件夹名称（必传）
+                parent_path: 父文件夹路径（可选，相对于知识库根目录，默认创建在根目录）
+        返回：
+            成功：JSON响应，提示“文件夹创建成功”
+            失败：
+                - 文件夹名称为空：返回“文件夹名称不能为空”
+                - 路径无效（超出知识库范围）：返回“无效的文件夹路径”
+                - 文件夹已存在：返回“文件夹已存在”
+                - 创建失败：返回具体的错误原因
+        异常：捕获文件夹创建过程中的所有异常（如权限不足、路径非法等），返回错误信息
+        """
     """创建新文件夹"""
     try:
         data = request.get_json()
@@ -504,6 +686,19 @@ def create_folder():
 # 添加模板上传接口
 @app.route('/upload-template', methods=['POST'])
 def upload_template():
+    """
+        功能：上传问答系统的回答模板文件，替换系统默认模板并动态更新配置
+        参数：
+            表单参数：
+                template_file: 待上传的模板文件（必传）
+        返回：
+            成功：JSON响应，包含上传成功提示、文件保存路径、原文件名、模板类型
+            失败：
+                - 未选择文件/文件名为空：返回“未选择文件”
+                - 文件类型不支持：返回允许的模板文件类型列表
+                - 处理失败：返回具体的错误原因
+        异常：捕获文件保存、目录创建、配置更新过程中的所有异常，返回错误信息
+        """
     if 'template_file' not in request.files:
         return jsonify({'error': '未选择文件'})
 
